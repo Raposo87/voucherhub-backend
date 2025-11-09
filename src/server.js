@@ -10,6 +10,8 @@ const app = express();
 // === 🌐 Configuração de CORS ===
 const allowedOrigins = [
   'https://modest-comfort-production.up.railway.app', // ✅ frontend no Railway
+  'https://voucherhub.pt',
+  'https://www.voucherhub.pt',
   'http://localhost:3000' // ✅ ambiente local de desenvolvimento
 ];
 
