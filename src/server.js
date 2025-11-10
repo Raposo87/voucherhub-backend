@@ -71,24 +71,3 @@ initDb()
     console.error('❌ Failed to init DB', err);
     process.exit(1);
   });
-
-
-
-
-  
-
-  import { sendEmail } from './utils/sendEmail.js';
-
-app.get('/test-email', async (req, res) => {
-  try {
-    await sendEmail({
-      to: 'teuemail@gmail.com',
-      subject: 'Teste VoucherHub SMTP',
-      html: '<h2>🎟️ Teste de envio de email do VoucherHub</h2><p>Se recebes isto, o SMTP está a funcionar ✅</p>'
-    });
-    res.json({ ok: true, message: 'Email enviado com sucesso!' });
-  } catch (err) {
-    console.error('❌ Erro ao enviar email:', err);
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
