@@ -7,7 +7,7 @@ export async function sendEmail({ to, subject, html, text }) {
     return;
   }
 
-  const from = SMTP_FROM || "VoucherHub <no-reply@voucherhub.pt>";
+  const from = SMTP_FROM || "VoucherHub <info@voucherhub.pt>";
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
