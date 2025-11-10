@@ -53,17 +53,26 @@ router.post('/webhook', async (req, res) => {
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(req.rawBody, sig, whSecret);
+    // ✅ Caso o Stripe use "application/json" tradicional
+    if (req.rawBody) {
+      event = stripe.webhooks.constructEvent(req.rawBody, sig, whSecret);
+    } else {
+      // ⚙️ Compatibilidade com "Instantâneo" (snapshot)
+      event = req.body;
+    }
   } catch (err) {
     console.error('[stripe] webhook signature verification failed', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
+  // ✅ Processar checkout completo
+  if (event.type === 'checkout.session.completed' || event.object === 'checkout.session') {
+    const session = event.data ? event.data.object : event;
     try {
-      // Avoid duplicates
-      const existing = await pool.query('SELECT id FROM vouchers WHERE stripe_session_id = $1', [session.id]);
+      const existing = await pool.query(
+        'SELECT id FROM vouchers WHERE stripe_session_id = $1',
+        [session.id]
+      );
       if (existing.rows.length) {
         console.log('[voucher] already issued for session', session.id);
         return res.json({ received: true });
@@ -81,7 +90,6 @@ router.post('/webhook', async (req, res) => {
         [email, partnerSlug, code, amountCents, currency, session.id]
       );
 
-      // Send email
       const productName = session?.display_items?.[0]?.custom?.name || 'Voucher VoucherHub';
       const html = `
         <div style="font-family:Arial,sans-serif">
@@ -90,18 +98,20 @@ router.post('/webhook', async (req, res) => {
           <p><b>Parceiro:</b> ${partnerSlug}</p>
           <p><b>Produto:</b> ${productName}</p>
           <p><b>Código do Voucher:</b> <code style="font-size:18px">${code}</code></p>
-          <p><b>Valor pago:</b> ${(amountCents/100).toFixed(2)} ${currency.toUpperCase()}</p>
+          <p><b>Valor pago:</b> ${(amountCents / 100).toFixed(2)} ${currency.toUpperCase()}</p>
           <hr/>
           <p>Guarde este e-mail. Utilize o voucher conforme as instruções na página do parceiro.</p>
           <p>Em caso de dúvida, responda a este e-mail.</p>
         </div>
       `;
+
       await sendEmail({
         to: email,
         subject: 'Seu voucher VoucherHub',
         html
       });
 
+      console.log(`[voucher] email enviado para ${email}`);
     } catch (err) {
       console.error('[voucher] creation/email failed', err);
     }
@@ -109,5 +119,3 @@ router.post('/webhook', async (req, res) => {
 
   res.json({ received: true });
 });
-
-export default router;
