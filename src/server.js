@@ -1,5 +1,5 @@
 import express from 'express';
-import bodyParser from 'body-parser'; // <— adiciona esta importação
+import bodyParser from 'body-parser';
 import cors from 'cors';
 import 'dotenv/config.js';
 
@@ -35,6 +35,7 @@ app.use(cors({
 app.get('/health', (req, res) => res.status(200).json({ ok: true }));
 
 // ⚙️ Usa raw body apenas no webhook Stripe
+// ESTA PARTE É O QUE GARANTE QUE O req.body NO WEHOOK CONTÉM O BUFFER RAW.
 app.use(
   '/api/payments/webhook',
   bodyParser.raw({ type: 'application/json' })

@@ -53,7 +53,9 @@ router.post('/webhook', async (req, res) => {
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(req.rawBody, sig, whSecret);
+    // 💡 CORREÇÃO CRÍTICA: Use req.body. 
+    // O middleware `express.raw` no server.js anexa o buffer RAW a req.body.
+    event = stripe.webhooks.constructEvent(req.body, sig, whSecret);
   } catch (err) {
     console.error('[stripe] webhook signature verification failed', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -75,6 +77,12 @@ router.post('/webhook', async (req, res) => {
       const currency = session.currency || 'eur';
       const code = generateVoucherCode();
 
+      // Certifique-se de que o email não é nulo antes da inserção
+      if (!email) {
+         console.error('[voucher] Cannot issue voucher: Email is missing in Stripe session.');
+         return res.status(400).json({ error: 'Email missing from Stripe session for voucher insertion.' });
+      }
+
       await pool.query(
         `INSERT INTO vouchers (email, partner_slug, code, amount_cents, currency, stripe_session_id)
          VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -82,7 +90,8 @@ router.post('/webhook', async (req, res) => {
       );
 
       // Send email
-      const productName = session?.display_items?.[0]?.custom?.name || 'Voucher VoucherHub';
+      // Nota: o acesso a display_items pode ser complexo. Simplificado para segurança.
+      const productName = session.line_items?.data?.[0]?.description || session.metadata.productName || 'Voucher VoucherHub';
       const html = `
         <div style="font-family:Arial,sans-serif">
           <h1>O seu voucher chegou 🎉</h1>
@@ -96,6 +105,8 @@ router.post('/webhook', async (req, res) => {
           <p>Em caso de dúvida, responda a este e-mail.</p>
         </div>
       `;
+      
+      // Assumindo que a função sendEmail está configurada corretamente com SMTP_USER/PASS
       await sendEmail({
         to: email,
         subject: 'Seu voucher VoucherHub',
