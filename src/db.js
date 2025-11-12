@@ -19,7 +19,10 @@ export async function initDb() {
       amount_cents INTEGER,
       currency VARCHAR(10) DEFAULT 'eur',
       stripe_session_id VARCHAR(255) UNIQUE,
+      status VARCHAR(20) DEFAULT 'active',
+      validated_at TIMESTAMP,
+      partner_pin VARCHAR(10),
       created_at TIMESTAMP DEFAULT NOW()
     );
-  `);
+  `);  
 }
