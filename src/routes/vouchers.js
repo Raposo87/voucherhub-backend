@@ -1,3 +1,7 @@
+import { Router } from 'express';
+import { pool } from '../db.js';
+
+const router = express.Router();
 /**
  * GET /api/vouchers/validate/:code
  * Retorna informações sobre o voucher e seu status
@@ -92,3 +96,5 @@ router.post("/use/:code", async (req, res) => {
     res.status(500).json({ error: "Erro interno do servidor." });
   }
 });
+
+export default router;
