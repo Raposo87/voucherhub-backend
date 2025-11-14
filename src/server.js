@@ -1,6 +1,6 @@
 import express from 'express';
 import bodyParser from 'body-parser';
-import cors from 'cors';
+import cors from 'cors'; // <--- JÁ ESTÁ IMPORTADO!
 import 'dotenv/config.js';
 
 import paymentsRouter from './routes/payments.js';
@@ -9,7 +9,8 @@ import { initDb } from './db.js';
 
 const app = express();
 
-// 🌐 CORS
+// 🌐 CONFIGURAÇÃO CORS CORRETA:
+// Lista de origens permitidas (inclui 'voucherhub.pt' e 'www.voucherhub.pt')
 const allowedOrigins = [
   'https://modest-comfort-production.up.railway.app',
   'https://voucherhub.pt',
@@ -17,25 +18,23 @@ const allowedOrigins = [
   'http://localhost:3000'
 ];
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (!origin || allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(204);
-    }
-  }
-  next();
-});
+// Configure as opções do CORS
+const corsOptions = {
+    origin: allowedOrigins, // Usa a lista de origens que você já definiu
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS', // Inclui todos os métodos necessários
+    credentials: true, // Necessário para cookies, headers de autorização, etc.
+    // headers: 'Content-Type,Authorization', // O middleware CORS lida com Allowed-Headers automaticamente
+};
+
+// Aplica o middleware CORS ANTES DE QUALQUER ROTA
+app.use(cors(corsOptions));
+
+// --- O RESTO DO SEU CÓDIGO PERMANECE O MESMO ---
 
 // ✅ Health check
 app.get('/health', (req, res) => res.status(200).json({ ok: true }));
 
 // ⚙️ Usa raw body apenas no webhook Stripe
-// ESTA PARTE É O QUE GARANTE QUE O req.body NO WEHOOK CONTÉM O BUFFER RAW.
 app.use(
   '/api/payments/webhook',
   bodyParser.raw({ type: 'application/json' })
