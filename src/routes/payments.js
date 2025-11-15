@@ -90,19 +90,43 @@ router.post('/webhook', async (req, res) => {
       );
 
       // Send email
-      // Nota: o acesso a display_items pode ser complexo. Simplificado para segurança.
-      const productName = session.line_items?.data?.[0]?.description || session.metadata.productName || 'Voucher VoucherHub';
+      const validateUrl = `https://voucherhub.pt/validate.html?code=${code}`;
+
       const html = `
-        <div style="font-family:Arial,sans-serif">
-          <h1>O seu voucher chegou 🎉</h1>
-          <p>Obrigado pela sua compra!</p>
-          <p><b>Parceiro:</b> ${partnerSlug}</p>
-          <p><b>Produto:</b> ${productName}</p>
-          <p><b>Código do Voucher:</b> <code style="font-size:18px">${code}</code></p>
-          <p><b>Valor pago:</b> ${(amountCents/100).toFixed(2)} ${currency.toUpperCase()}</p>
-          <hr/>
-          <p>Guarde este e-mail. Utilize o voucher conforme as instruções na página do parceiro.</p>
-          <p>Em caso de dúvida, responda a este e-mail.</p>
+        <div style="font-family:Arial,sans-serif; line-height:1.5; color:#111">
+          <h1 style="margin:0 0 8px">O seu voucher chegou 🎉</h1>
+          <p style="margin:0 0 12px">Obrigado pela sua compra na VoucherHub!</p>
+
+          <div style="padding:12px 14px;border:1px solid #eee;border-radius:8px;margin-bottom:14px">
+            <p style="margin:0 0 6px"><b>Parceiro:</b> ${partnerSlug}</p>
+            <p style="margin:0 0 6px"><b>Código do Voucher:</b>
+              <code style="font-size:18px;background:#f6f6f6;padding:2px 6px;border-radius:4px">${code}</code>
+            </p>
+            <p style="margin:0 0 6px"><b>Valor pago:</b> ${(amountCents/100).toFixed(2)} ${currency.toUpperCase()}</p>
+          </div>
+
+          <p style="margin:0 0 10px">
+            ✅ <b>Validação Online:</b> apresente este QR ao funcionário, ou abra o link:
+            <br>
+            <a href="${validateUrl}" target="_blank" style="color:#2563eb">${validateUrl}</a>
+          </p>
+
+          <div style="text-align:center;margin:14px 0 12px">
+            <a href="${validateUrl}" target="_blank" style="text-decoration:none">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(validateUrl)}"
+                  alt="QR Code para validar o voucher" width="220" height="220"
+                  style="display:inline-block;border:8px solid #f6f6f6;border-radius:8px">
+            </a>
+          </div>
+
+          <p style="font-size:13px;color:#555;margin-top:10px">
+            Dica: o estabelecimento pode validar e, se estiver tudo certo, tocar em <b>“Marcar como usado”</b> na página.
+          </p>
+
+          <hr style="border:none;border-top:1px solid #eee;margin:16px 0">
+          <p style="font-size:12px;color:#666">
+            Guarde este e-mail. Em caso de dúvidas, responda a esta mensagem.
+          </p>
         </div>
       `;
       
