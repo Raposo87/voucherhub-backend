@@ -1,6 +1,6 @@
 // scripts/migrate.js
 import 'dotenv/config.js';
-import { pool } from '../db.js'
+import { pool } from '../src/db.js';
 
 async function run() {
   const statements = [

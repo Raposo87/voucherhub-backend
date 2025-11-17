@@ -9,7 +9,7 @@
 //rodar node update-stripe-id.js novamente
 
 import 'dotenv/config';
-import { pool } from '../db.js'
+import { pool } from './src/db.js';
 
 async function run() {
   try {

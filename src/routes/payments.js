@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import Stripe from 'stripe';
-import { pool } from '../db.js';
+import { pool } from './src/db.js';
 import { sendEmail } from '../utils/sendEmail.js';
 import { randomBytes } from 'crypto';
 
