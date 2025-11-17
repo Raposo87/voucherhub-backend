@@ -53,7 +53,6 @@ router.post('/webhook', async (req, res) => {
   let event;
 
   try {
-    // Acessa o buffer RAW do corpo para verificação
     event = stripe.webhooks.constructEvent(req.body, sig, whSecret);
   } catch (err) {
     console.error('[stripe] webhook signature verification failed', err.message);
@@ -63,7 +62,6 @@ router.post('/webhook', async (req, res) => {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     try {
-      // Evita duplicatas
       const existing = await pool.query('SELECT id FROM vouchers WHERE stripe_session_id = $1', [session.id]);
       if (existing.rows.length) {
         console.log('[voucher] already issued for session', session.id);
@@ -82,7 +80,7 @@ router.post('/webhook', async (req, res) => {
       }
 
       // ------------------------------------------------------------------
-      // 1. BUSCAR DADOS DO PARCEIRO (Incluindo os novos campos)
+      // 1. BUSCAR DADOS DO PARCEIRO NO BANCO DE DADOS
       // ------------------------------------------------------------------
       const partnerRes = await pool.query(
           `SELECT name, location, phone, email, price_original_cents, voucher_validity_days 
@@ -92,8 +90,8 @@ router.post('/webhook', async (req, res) => {
       
       const partnerData = partnerRes.rows[0] || {};
       
-      // Define valores padrão para evitar quebra de código
       const partnerName = partnerData.name || partnerSlug;
+      // Garante que usa o valor original do parceiro, mas fallback para o valor pago se não houver
       const valorOriginal = partnerData.price_original_cents || amountCents; 
       const daysValidity = partnerData.voucher_validity_days || 20; 
 
@@ -119,7 +117,7 @@ router.post('/webhook', async (req, res) => {
       const validadeAviso = `Válido por ${daysValidity} dias corridos (até ${validadeFormatada})`;
       const expiryWarning = `⚠️ Lembre-se: Utilize o seu voucher antes de ${validadeFormatada}.`;
       
-      // Insere o voucher no DB, incluindo a data de expiração (necessário para o validate funcionar)
+      // Insere o voucher no DB, incluindo a data de expiração
       await pool.query(
         `INSERT INTO vouchers (email, partner_slug, code, amount_cents, currency, stripe_session_id, expires_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -183,7 +181,7 @@ const html = `
             <h3 style="color:#2563eb; font-size: 18px; margin-bottom: 10px;">Informações do Parceiro (${partnerName})</h3>
             <ul style="list-style-type: none; padding: 0; margin: 0; font-size: 14px;">
               <li style="margin-bottom: 5px;">
-                <span style="font-weight: bold;">Endereço:</span> ${partnerData.location || 'Consulte o site do parceiro'}
+                <span style="font-weight: bold;">Endereço do Parceiro:</span> ${partnerData.location || 'Consulte o site do parceiro'}
               </li>
               <li style="margin-bottom: 5px;">
                 <span style="font-weight: bold;">Telefone:</span> ${partnerData.phone || 'Não disponível'}
