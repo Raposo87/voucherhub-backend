@@ -1,6 +1,6 @@
 // scripts/migrate-partners.js
 import 'dotenv/config.js';
-import { pool } from './src/db.js';
+import { pool } from '../db.js'
 
 async function run() {
   const partnerInserts = [
