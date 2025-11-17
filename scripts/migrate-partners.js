@@ -1,6 +1,6 @@
 // scripts/migrate-partners.js
 import 'dotenv/config.js';
-import { pool } from '../src/db.js'; // CORREÇÃO: O caminho correto para o db.js
+import { pool } from './src/db.js';
 
 async function run() {
   const partnerInserts = [
@@ -8,6 +8,7 @@ async function run() {
     `ALTER TABLE partners ADD COLUMN IF NOT EXISTS location VARCHAR(255);`,
     `ALTER TABLE partners ADD COLUMN IF NOT EXISTS price_original_cents INTEGER;`,
     `ALTER TABLE partners ADD COLUMN IF NOT EXISTS voucher_validity_days INTEGER DEFAULT 20;`, 
+    `ALTER TABLE partners ADD COLUMN IF NOT EXISTS stripe_account_id VARCHAR(255);`,
 
     // ETAPA 2: GARANTIR QUE A TABELA EXISTE
     `
@@ -21,6 +22,7 @@ async function run() {
       price_original_cents INTEGER,  
       voucher_validity_days INTEGER DEFAULT 20, 
       pin VARCHAR(10) NOT NULL,
+      stripe_account_id VARCHAR(255),    
       created_at TIMESTAMP DEFAULT NOW()
     );
     `,

@@ -23,6 +23,8 @@ export async function initDb() {
       status VARCHAR(20) NOT NULL DEFAULT 'active',
       used_at TIMESTAMP NULL,
       expires_at TIMESTAMP NULL,
+      platform_fee_cents INTEGER,
+      partner_share_cents INTEGER,
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);
@@ -31,6 +33,8 @@ export async function initDb() {
   await pool.query(`ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active';`);
   await pool.query(`ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS used_at TIMESTAMP NULL;`);
   await pool.query(`ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP NULL;`);
+  await pool.query(`ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS platform_fee_cents INTEGER;`);
+  await pool.query(`ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS partner_share_cents INTEGER;`);
 
   // Índices úteis
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_vouchers_status ON vouchers(status);`);

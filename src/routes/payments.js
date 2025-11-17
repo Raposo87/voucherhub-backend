@@ -11,40 +11,84 @@ function generateVoucherCode() {
   return 'VH-' + randomBytes(4).toString('hex').toUpperCase();
 }
 
-// Create Stripe Checkout Session
+// Create Stripe Checkout Session (com split 18% / 82%)
 router.post('/create-checkout-session', async (req, res) => {
   try {
     const { email, partnerSlug, productName, amountCents, currency = 'eur' } = req.body;
+
     if (!email || !partnerSlug || !productName || !amountCents) {
-      return res.status(400).json({ error: 'Missing fields: email, partnerSlug, productName, amountCents' });
+      return res
+        .status(400)
+        .json({ error: 'Missing fields: email, partnerSlug, productName, amountCents' });
     }
 
-    const successUrl = `${process.env.FRONTEND_URL}/success?session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl  = `${process.env.FRONTEND_URL}/cancel`;
+    // 1) Buscar dados do parceiro para obter o stripe_account_id
+    const partnerResult = await pool.query(
+      'SELECT stripe_account_id FROM partners WHERE slug = $1',
+      [partnerSlug]
+    );
 
+    if (!partnerResult.rows.length) {
+      return res.status(400).json({ error: 'Parceiro não encontrado no banco.' });
+    }
+
+    const partner = partnerResult.rows[0];
+
+    if (!partner.stripe_account_id) {
+      return res.status(400).json({
+        error: 'Parceiro não possui stripe_account_id configurado. Configure no banco antes de vender.'
+      });
+    }
+
+    // 2) Calcular a taxa da plataforma (18% pra você)
+    const totalCents = Number(amountCents);
+    if (!Number.isFinite(totalCents) || totalCents <= 0) {
+      return res.status(400).json({ error: 'amountCents inválido.' });
+    }
+
+    const platformFeeCents = Math.round(totalCents * 0.18); // 18% para você
+
+    const successUrl = `${process.env.FRONTEND_URL}/success?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${process.env.FRONTEND_URL}/cancel`;
+
+    // 3) Criar sessão de checkout com split usando Stripe Connect
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
       mode: 'payment',
+      payment_method_types: ['card'],
       customer_email: email,
-      line_items: [{
-        price_data: {
-          currency,
-          product_data: { name: productName },
-          unit_amount: amountCents
-        },
-        quantity: 1
-      }],
+      line_items: [
+        {
+          price_data: {
+            currency,
+            product_data: { name: productName },
+            unit_amount: totalCents
+          },
+          quantity: 1
+        }
+      ],
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: { email, partnerSlug }
+      metadata: { email, partnerSlug },
+
+      // 💰 Aqui acontece a divisão:
+      // - cobrança inteira ocorre na SUA conta
+      // - 18% fica com você (application_fee_amount)
+      // - restante é enviado ao parceiro (transfer_data.destination)
+      payment_intent_data: {
+        application_fee_amount: platformFeeCents,
+        transfer_data: {
+          destination: partner.stripe_account_id
+        }
+      }
     });
 
-    res.json({ url: session.url });
+    return res.json({ url: session.url });
   } catch (err) {
     console.error('[stripe] create session error', err);
-    res.status(500).json({ error: 'Could not create session' });
+    return res.status(500).json({ error: 'Could not create session' });
   }
 });
+
 
 // Stripe Webhook
 router.post('/webhook', async (req, res) => {
@@ -73,6 +117,10 @@ router.post('/webhook', async (req, res) => {
       const amountCents = session.amount_total || 0;
       const currency = session.currency || 'eur';
       const code = generateVoucherCode();
+      // 18% para a plataforma, 82% para o parceiro
+      const platformFeeCents = Math.round(amountCents * 0.18); // 18% para a plataforma
+      const partnerShareCents = amountCents - platformFeeCents; // 82% para o parceiro
+
 
       if (!email) {
          console.error('[voucher] Cannot issue voucher: Email is missing in Stripe session.');
@@ -117,9 +165,29 @@ router.post('/webhook', async (req, res) => {
       
       // Insere o voucher no DB, incluindo a data de expiração
       await pool.query(
-        `INSERT INTO vouchers (email, partner_slug, code, amount_cents, currency, stripe_session_id, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [email, partnerSlug, code, amountCents, currency, session.id, expiryDate.toISOString()]
+        `INSERT INTO vouchers (
+          email,
+          partner_slug,
+          code,
+          amount_cents,
+          currency,
+          stripe_session_id,
+          expires_at,
+          platform_fee_cents,
+          partner_share_cents
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          email,
+          partnerSlug,
+          code,
+          amountCents,
+          currency,
+          session.id,
+          expiryDate.toISOString(),
+          platformFeeCents,
+          partnerShareCents
+        ]
       );
 
       // Send email
