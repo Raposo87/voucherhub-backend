@@ -83,11 +83,9 @@ router.post('/webhook', async (req, res) => {
       // 1. BUSCAR DADOS DO PARCEIRO NO BANCO DE DADOS
       // ------------------------------------------------------------------
       const partnerRes = await pool.query(
-          `SELECT name, location, phone, email, price_original_cents, voucher_validity_days 
-           FROM partners WHERE slug = $1`, 
-          [partnerSlug]
+        `SELECT name, email, phone, location, price_original_cents, voucher_validity_days FROM partners WHERE slug = $1`, 
+        [partnerSlug]
       );
-      
       const partnerData = partnerRes.rows[0] || {};
       
       const partnerName = partnerData.name || partnerSlug;
@@ -106,7 +104,7 @@ router.post('/webhook', async (req, res) => {
           ? Math.round((economia / valorOriginal) * 100) 
           : 0; 
           
-      // Validade (20 dias corridos)
+      // Validade (60 dias corridos)
       const expiryDate = new Date();
       expiryDate.setDate(expiryDate.getDate() + daysValidity);
       const validadeFormatada = expiryDate.toLocaleDateString('pt-PT', {

@@ -1,17 +1,15 @@
 // scripts/migrate-partners.js
 import 'dotenv/config.js';
-// ⚠️ CORREÇÃO DE CAMINHO: Deve ser '../src/db.js' ou o caminho correto
-// Mudei de '../db.js' para o caminho mais provável '../src/db.js'
-import { pool } from '../src/db.js'; 
+import { pool } from '../src/db.js'; // CORREÇÃO: O caminho correto para o db.js
 
 async function run() {
   const partnerInserts = [
-    // ⚠️ ETAPA 1: GARANTIR QUE AS COLUNAS EXISTEM (Idempotente)
+    // ETAPA 1: GARANTIR QUE AS COLUNAS EXISTEM
     `ALTER TABLE partners ADD COLUMN IF NOT EXISTS location VARCHAR(255);`,
     `ALTER TABLE partners ADD COLUMN IF NOT EXISTS price_original_cents INTEGER;`,
-    `ALTER TABLE partners ADD COLUMN IF NOT EXISTS voucher_validity_days INTEGER DEFAULT 60;`,
+    `ALTER TABLE partners ADD COLUMN IF NOT EXISTS voucher_validity_days INTEGER DEFAULT 20;`, 
 
-    // ⚠️ ETAPA 2: GARANTIR QUE A TABELA EXISTE (Idempotente)
+    // ETAPA 2: GARANTIR QUE A TABELA EXISTE
     `
     CREATE TABLE IF NOT EXISTS partners (
       id SERIAL PRIMARY KEY,
@@ -21,79 +19,77 @@ async function run() {
       phone VARCHAR(50),
       location VARCHAR(255),  
       price_original_cents INTEGER,  
-      voucher_validity_days INTEGER DEFAULT 60, 
+      voucher_validity_days INTEGER DEFAULT 20, 
       pin VARCHAR(10) NOT NULL,
       created_at TIMESTAMP DEFAULT NOW()
     );
     `,
 
-    // ====================================================================
-    // 🧠 ETAPA 3: INSERÇÃO E ATUALIZAÇÃO DOS DADOS DOS PARCEIROS (Com base no experiences.json)
-    // ====================================================================
-
-    // ➡️ SLUG: surf-wave-lisbon (Preço Original: €30,00 -> 3000 centavos)
+    // ETAPA 3: INSERÇÃO E ATUALIZAÇÃO DOS DADOS DOS PARCEIROS. voucher_validity_days = 60
+    
+    // SLUG: surf-wave-lisbon
     `
     INSERT INTO partners (slug, name, email, phone, location, price_original_cents, voucher_validity_days, pin) VALUES
-      ('surf-wave-lisbon', 'Surf Wave Lisbon', 'surfwavelisbon@gmail.com', '+351 969 013 614 / +351 961 793 637', 'Cabana do Pescador, Costa da Caparica', 3000, 20, '1234')
+      ('surf-wave-lisbon', 'Surf Wave Lisbon', 'surfwavelisbon@gmail.com', '+351 969 013 614 / +351 961 793 637', 'Cabana do Pescador, Costa da Caparica', 3000, 60, '1234')
     ON CONFLICT (slug) DO UPDATE SET 
         name = EXCLUDED.name,
         email = EXCLUDED.email,
         phone = EXCLUDED.phone,
         location = EXCLUDED.location, 
         price_original_cents = EXCLUDED.price_original_cents,
-        voucher_validity_days = EXCLUDED.voucher_validity_days;
+        voucher_validity_days = 60;
     `,
     
-    // ➡️ SLUG: twolines (Preço Original: €67,83 -> 6783 centavos)
+    // SLUG: twolines
     `
     INSERT INTO partners (slug, name, email, phone, location, price_original_cents, voucher_validity_days, pin) VALUES
-      ('twolines', 'Twolines', '', '', 'Costa da Caparica', 6783, 20, '4321')
+      ('twolines', 'Twolines', '', '', 'Costa da Caparica', 6783, 60, '4321')
     ON CONFLICT (slug) DO UPDATE SET 
         name = EXCLUDED.name,
         email = EXCLUDED.email,
         phone = EXCLUDED.phone,
         location = EXCLUDED.location, 
         price_original_cents = EXCLUDED.price_original_cents,
-        voucher_validity_days = EXCLUDED.voucher_validity_days;
+        voucher_validity_days = 60;
     `,
 
-    // ➡️ SLUG: nanan-adventures (Preço Original: €30,00 -> 3000 centavos | Validade 30 dias)
+    // SLUG: nanan-adventures
     `
     INSERT INTO partners (slug, name, email, phone, location, price_original_cents, voucher_validity_days, pin) VALUES
-      ('nanan-adventures', 'Nanan Adventures', 'nananadventures@gmail.com', '+351 922 256 634', 'Praça Dom Afonso V, 2710-521  - Portela de Sintra, Portugal', 3000, 30, '9876')
+      ('nanan-adventures', 'Nanan Adventures', 'nananadventures@gmail.com', '+351 922 256 634', 'Praça Dom Afonso V, 2710-521  - Portela de Sintra, Portugal', 3000, 60, '9876')
     ON CONFLICT (slug) DO UPDATE SET 
         name = EXCLUDED.name,
         email = EXCLUDED.email,
         phone = EXCLUDED.phone,
         location = EXCLUDED.location, 
         price_original_cents = EXCLUDED.price_original_cents,
-        voucher_validity_days = EXCLUDED.voucher_validity_days;
+        voucher_validity_days = 60;
     `,
 
-    // ➡️ SLUG: yoga-kula (Preço Original: €15,00 -> 1500 centavos)
+    // SLUG: yoga-kula
     `
     INSERT INTO partners (slug, name, email, phone, location, price_original_cents, voucher_validity_days, pin) VALUES
-      ('yoga-kula', 'Yoga Kula', 'geral@yogakulabenfica.com', '(+351)933782610', 'Rua General Morais Sarmento, Nº60, Lisboa', 1500, 20, '5678')
+      ('yoga-kula', 'Yoga Kula', 'geral@yogakulabenfica.com', '(+351)933782610', 'Rua General Morais Sarmento, Nº60, Lisboa', 1500, 60, '5678')
     ON CONFLICT (slug) DO UPDATE SET 
         name = EXCLUDED.name,
         email = EXCLUDED.email,
         phone = EXCLUDED.phone,
         location = EXCLUDED.location, 
         price_original_cents = EXCLUDED.price_original_cents,
-        voucher_validity_days = EXCLUDED.voucher_validity_days;
+        voucher_validity_days = 60;
     `,
 
-    // ➡️ SLUG: espaco-libela (Preço Original: €90,00 -> 9000 centavos)
+    // SLUG: espaco-libela
     `
     INSERT INTO partners (slug, name, email, phone, location, price_original_cents, voucher_validity_days, pin) VALUES
-      ('espaco-libela', 'Espaço libélula', 'nicoleraposof7@gmail.com', '+351 936 065 569', 'Rua Vieira da Silva, 54 Lisboa', 9000, 20, '1122')
+      ('espaco-libela', 'Espaço libélula', 'nicoleraposof7@gmail.com', '+351 936 065 569', 'Rua Vieira da Silva, 54 Lisboa', 9000, 60, '1122')
     ON CONFLICT (slug) DO UPDATE SET 
         name = EXCLUDED.name,
         email = EXCLUDED.email,
         phone = EXCLUDED.phone,
         location = EXCLUDED.location, 
         price_original_cents = EXCLUDED.price_original_cents,
-        voucher_validity_days = EXCLUDED.voucher_validity_days;
+        voucher_validity_days = 60;
     `,
   ];
 
