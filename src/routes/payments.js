@@ -3,7 +3,6 @@ import Stripe from 'stripe';
 import { pool } from '../db.js';
 import { sendEmail } from '../utils/sendEmail.js';
 import { randomBytes } from 'crypto';
-import fs from 'fs';
 
 const router = Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
@@ -74,17 +73,6 @@ router.post('/webhook', async (req, res) => {
 
       const email = session.customer_details?.email || session.metadata?.email;
       const partnerSlug = session.metadata?.partnerSlug || 'partner';
-      const expFile = JSON.parse(fs.readFileSync('./experiences.json', 'utf8'));
-
-      let partnerData = null;
-
-      for (const mode of expFile.modes) {
-        const found = mode.partners?.find(p => p.slug === partnerSlug);
-        if (found) {
-          partnerData = found;
-          break;
-        }
-      }
       const amountCents = session.amount_total || 0;
       const currency = session.currency || 'eur';
       const code = generateVoucherCode();
@@ -104,62 +92,84 @@ router.post('/webhook', async (req, res) => {
       // Send email
       const validateUrl = `https://voucherhub.pt/validate.html?code=${code}`;
 
-      const originalPrice = partnerData.price_original || "";
-      const discountPrice = partnerData.price_discount || "";
-      const discountLabel = partnerData.discount_label || "";
-      const savings = partnerData.savings || "";
-      const expirationDate = new Date();
-      expirationDate.setDate(expirationDate.getDate() + 20);
-      
-      const html = `
-      <div style="max-width:600px;margin:auto;font-family:Arial;background:#f8f9fa;padding:20px;border-radius:10px">
-      
-        <div style="text-align:center;padding:20px;background:#234;width:100%;border-radius:10px 10px 0 0;color:white">
-          <h2 style="margin:0">🎉 O seu Voucher chegou!</h2>
-        </div>
-      
-        <p>Obrigado por adquirir uma experiência com <strong>${partnerData.name}</strong> através da VoucherHub.</p>
-      
-        <div style="background:#eef3ff;padding:15px;border-radius:8px;margin-bottom:20px">
-          <p><strong>Código do Voucher:</strong><br>
-          <span style="font-size:22px;font-weight:bold;color:#2c4cff">${code}</span></p>
-      
-          <p><strong>Valor pago:</strong> €${(amountCents/100).toFixed(2)}</p>
-          <p><strong>Preço original:</strong> ${originalPrice}</p>
-          <p><strong>Desconto:</strong> ${discountLabel}</p>
-          <p><strong>Você economizou:</strong> ${savings}</p>
-          
-          <p><strong>Parceiro:</strong> ${partnerData.name}</p>
-          <p><strong>Endereço:</strong> ${partnerData.location}</p>
-          <p><strong>Email:</strong> ${partnerData.email || '—'}</p>
-          <p><strong>Telefone:</strong> ${partnerData.phone || '—'}</p>
-      
-          <p><strong>Validade:</strong> Até ${expirationDate.toLocaleDateString('pt-PT')}<br>
-          (Voucher válido por 20 dias corridos. Após esse período o voucher estará expirado.)</p>
-        </div>
-      
-        <div style="text-align:center;margin:20px 0">
-          <img src="${qrCodeImage}" style="width:250px;height:250px">
-        </div>
-      
-        <p style="text-align:center">
-          Aponte a câmara ou clique no QR Code para validar o voucher
-        </p>
-      
-        <div style="text-align:center;margin-top:15px">
-          <a href="${process.env.FRONTEND_URL}/validate?code=${code}"
-             style="background:#ff7a00;color:white;padding:12px 20px;border-radius:8px;
-             text-decoration:none;font-size:18px;font-weight:bold;display:inline-block">
-             Validar Voucher
-          </a>
-        </div>
-      
-        <p style="text-align:center;margin-top:40px;font-size:12px;color:#777">
-          VoucherHub © ${new Date().getFullYear()} — Todos os direitos reservados.
-        </p>
-      </div>
-      `;
-      
+const html = `
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f7f7f7;padding:40px 0;">
+  <tr>
+    <td align="center">
+      <table width="500" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,0.1);font-family:Arial,sans-serif;">
+        
+        <!-- Header -->
+        <tr>
+          <td style="background:#1f2b6c;padding:25px;text-align:center;">
+            <img src="https://voucherhub.pt/logo.png" width="120" alt="VoucherHub" />
+          </td>
+        </tr>
+
+        <!-- Title -->
+        <tr>
+          <td style="padding:25px;text-align:center;color:#333;">
+            <h2 style="margin:0;font-size:24px;">🎉 O seu Voucher chegou!</h2>
+            <p style="margin:10px 0 0;font-size:15px;">
+              Obrigado por adquirir uma experiência com o <b>${partnerSlug}</b> através da VoucherHub.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Voucher box -->
+        <tr>
+          <td style="padding:20px 30px;">
+            <table width="100%" style="background:#f1f4ff;border-radius:10px;padding:15px;">
+              <tr>
+                <td>
+                  <p style="margin:0;font-size:14px;"><b>Código do Voucher:</b></p>
+                  <p style="margin:4px 0 12px;font-size:22px;font-weight:bold;letter-spacing:2px;color:#1f2b6c;">
+                    ${code}
+                  </p>
+
+                  <p style="margin:0;font-size:14px;"><b>Valor pago:</b> ${(amountCents/100).toFixed(2)} ${currency.toUpperCase()}</p>
+                  <p style="margin:4px 0 0;font-size:14px;"><b>Parceiro:</b> ${partnerSlug}</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- QR Code -->
+        <tr>
+          <td style="padding:10px 0 20px;text-align:center;">
+            <a href="${validateUrl}" target="_blank">
+              <img src="https://quickchart.io/qr?text=${encodeURIComponent(validateUrl)}&centerImageUrl=https://voucherhub.pt/logo.png&size=300" 
+                   width="200" 
+                   style="border-radius:12px;"
+                   alt="QRCode"/>
+            </a>
+            <p style="margin-top:10px;font-size:13px;color:#888;">
+              Aponte a câmara ou clique no QR Code para validar o voucher
+            </p>
+          </td>
+        </tr>
+
+        <!-- Button -->
+        <tr>
+          <td align="center" style="padding:0 20px 30px;">
+            <a href="${validateUrl}"
+               style="background:#ff7f50;color:white;text-decoration:none;padding:12px 25px;border-radius:6px;font-size:16px;font-weight:bold;display:inline-block;">
+              Validar Voucher
+            </a>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f7f7f7;padding:15px;text-align:center;color:#777;font-size:12px;">
+            VoucherHub © ${new Date().getFullYear()} — Todos os direitos reservados.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+`;
 
       
       // Assumindo que a função sendEmail está configurada corretamente com SMTP_USER/PASS
