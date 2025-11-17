@@ -9,7 +9,7 @@ async function run() {
     // ⚠️ ETAPA 1: GARANTIR QUE AS COLUNAS EXISTEM (Idempotente)
     `ALTER TABLE partners ADD COLUMN IF NOT EXISTS location VARCHAR(255);`,
     `ALTER TABLE partners ADD COLUMN IF NOT EXISTS price_original_cents INTEGER;`,
-    `ALTER TABLE partners ADD COLUMN IF NOT EXISTS voucher_validity_days INTEGER DEFAULT 20;`,
+    `ALTER TABLE partners ADD COLUMN IF NOT EXISTS voucher_validity_days INTEGER DEFAULT 60;`,
 
     // ⚠️ ETAPA 2: GARANTIR QUE A TABELA EXISTE (Idempotente)
     `
@@ -21,7 +21,7 @@ async function run() {
       phone VARCHAR(50),
       location VARCHAR(255),  
       price_original_cents INTEGER,  
-      voucher_validity_days INTEGER DEFAULT 20, 
+      voucher_validity_days INTEGER DEFAULT 60, 
       pin VARCHAR(10) NOT NULL,
       created_at TIMESTAMP DEFAULT NOW()
     );
