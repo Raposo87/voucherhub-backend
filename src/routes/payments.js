@@ -93,7 +93,7 @@ router.post('/webhook', async (req, res) => {
       const partnerName = partnerData.name || partnerSlug;
       // Garante que usa o valor original do parceiro, mas fallback para o valor pago se não houver
       const valorOriginal = partnerData.price_original_cents || amountCents; 
-      const daysValidity = partnerData.voucher_validity_days || 20; 
+      const daysValidity = partnerData.voucher_validity_days || 60; 
 
       // ------------------------------------------------------------------
       // 2. CÁLCULOS
@@ -114,7 +114,7 @@ router.post('/webhook', async (req, res) => {
           month: 'long',
           year: 'numeric'
       });
-      const validadeAviso = `Válido por ${daysValidity} dias corridos (até ${validadeFormatada})`;
+      const validadeAviso = `Válido por ${daysValidity} dias (até ${validadeFormatada})`;
       const expiryWarning = `⚠️ Lembre-se: Utilize o seu voucher antes de ${validadeFormatada}.`;
       
       // Insere o voucher no DB, incluindo a data de expiração
