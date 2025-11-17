@@ -53,8 +53,7 @@ router.post('/webhook', async (req, res) => {
   let event;
 
   try {
-    // 💡 CORREÇÃO CRÍTICA: Use req.body. 
-    // O middleware `express.raw` no server.js anexa o buffer RAW a req.body.
+    // Acessa o buffer RAW do corpo para verificação
     event = stripe.webhooks.constructEvent(req.body, sig, whSecret);
   } catch (err) {
     console.error('[stripe] webhook signature verification failed', err.message);
@@ -64,33 +63,71 @@ router.post('/webhook', async (req, res) => {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     try {
-      // Avoid duplicates
+      // Evita duplicatas
       const existing = await pool.query('SELECT id FROM vouchers WHERE stripe_session_id = $1', [session.id]);
       if (existing.rows.length) {
         console.log('[voucher] already issued for session', session.id);
         return res.json({ received: true });
       }
-
+      
       const email = session.customer_details?.email || session.metadata?.email;
       const partnerSlug = session.metadata?.partnerSlug || 'partner';
       const amountCents = session.amount_total || 0;
       const currency = session.currency || 'eur';
       const code = generateVoucherCode();
 
-      // Certifique-se de que o email não é nulo antes da inserção
       if (!email) {
          console.error('[voucher] Cannot issue voucher: Email is missing in Stripe session.');
          return res.status(400).json({ error: 'Email missing from Stripe session for voucher insertion.' });
       }
 
+      // ------------------------------------------------------------------
+      // 1. BUSCAR DADOS DO PARCEIRO (Incluindo os novos campos)
+      // ------------------------------------------------------------------
+      const partnerRes = await pool.query(
+          `SELECT name, location, phone, email, price_original_cents, voucher_validity_days 
+           FROM partners WHERE slug = $1`, 
+          [partnerSlug]
+      );
+      
+      const partnerData = partnerRes.rows[0] || {};
+      
+      // Define valores padrão para evitar quebra de código
+      const partnerName = partnerData.name || partnerSlug;
+      const valorOriginal = partnerData.price_original_cents || amountCents; 
+      const daysValidity = partnerData.voucher_validity_days || 20; 
+
+      // ------------------------------------------------------------------
+      // 2. CÁLCULOS
+      // ------------------------------------------------------------------
+      const valorPago = amountCents;
+      const economia = valorOriginal - valorPago;
+
+      // Desconto (%)
+      const desconto = valorOriginal > 0 && economia > 0
+          ? Math.round((economia / valorOriginal) * 100) 
+          : 0; 
+          
+      // Validade (20 dias corridos)
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + daysValidity);
+      const validadeFormatada = expiryDate.toLocaleDateString('pt-PT', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+      });
+      const validadeAviso = `Válido por ${daysValidity} dias corridos (até ${validadeFormatada})`;
+      const expiryWarning = `⚠️ Lembre-se: Utilize o seu voucher antes de ${validadeFormatada}.`;
+      
+      // Insere o voucher no DB, incluindo a data de expiração (necessário para o validate funcionar)
       await pool.query(
-        `INSERT INTO vouchers (email, partner_slug, code, amount_cents, currency, stripe_session_id)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [email, partnerSlug, code, amountCents, currency, session.id]
+        `INSERT INTO vouchers (email, partner_slug, code, amount_cents, currency, stripe_session_id, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [email, partnerSlug, code, amountCents, currency, session.id, expiryDate.toISOString()]
       );
 
       // Send email
-      const validateUrl = `https://voucherhub.pt/validate.html?code=${code}`;
+      const validateUrl = `${process.env.FRONTEND_URL}/validate.html?code=${code}`;
 
 const html = `
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f7f7f7;padding:40px 0;">
@@ -98,24 +135,21 @@ const html = `
     <td align="center">
       <table width="500" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,0.1);font-family:Arial,sans-serif;">
         
-        <!-- Header -->
         <tr>
           <td style="background:#1f2b6c;padding:25px;text-align:center;">
             <img src="https://voucherhub.pt/logo.png" width="120" alt="VoucherHub" />
           </td>
         </tr>
 
-        <!-- Title -->
         <tr>
           <td style="padding:25px;text-align:center;color:#333;">
             <h2 style="margin:0;font-size:24px;">🎉 O seu Voucher chegou!</h2>
             <p style="margin:10px 0 0;font-size:15px;">
-              Obrigado por adquirir uma experiência com o <b>${partnerSlug}</b> através da VoucherHub.
+              Obrigado por adquirir uma experiência com o <b>${partnerName}</b> através da VoucherHub.
             </p>
           </td>
         </tr>
 
-        <!-- Voucher box -->
         <tr>
           <td style="padding:20px 30px;">
             <table width="100%" style="background:#f1f4ff;border-radius:10px;padding:15px;">
@@ -125,16 +159,42 @@ const html = `
                   <p style="margin:4px 0 12px;font-size:22px;font-weight:bold;letter-spacing:2px;color:#1f2b6c;">
                     ${code}
                   </p>
-
-                  <p style="margin:0;font-size:14px;"><b>Valor pago:</b> ${(amountCents/100).toFixed(2)} ${currency.toUpperCase()}</p>
-                  <p style="margin:4px 0 0;font-size:14px;"><b>Parceiro:</b> ${partnerSlug}</p>
+                  
+                  <p style="margin:0;font-size:14px;">✔ **Valor Original:** <span style="text-decoration: line-through;">${(valorOriginal/100).toFixed(2)} ${currency.toUpperCase()}</span></p>
+                  <p style="margin:4px 0 0;font-size:14px;">✔ **Valor Pago:** <span style="font-weight: bold;">${(valorPago/100).toFixed(2)} ${currency.toUpperCase()}</span></p>
+                  <p style="margin:4px 0 0;font-size:14px;">✔ **Desconto (%):** ${desconto}%</p>
+                  <p style="margin:4px 0 0;font-size:14px;">✔ **Quanto Economizou:** ${(economia/100).toFixed(2)} ${currency.toUpperCase()}</p>
+                  
+                  <p style="margin:12px 0 0;font-size:14px;font-weight:bold;color:#ff7f50;">
+                    ✔ **Validade:** ${validadeAviso}
+                  </p>
+                  <p style="margin:4px 0 0;font-size:13px;color:#ef4444;">
+                    ✔ **Aviso de Expiração:** ${expiryWarning}
+                  </p>
+                  
                 </td>
               </tr>
             </table>
           </td>
         </tr>
-
-        <!-- QR Code -->
+        
+        <tr>
+          <td style="padding: 10px 30px 0;">
+            <h3 style="color:#2563eb; font-size: 18px; margin-bottom: 10px;">Informações do Parceiro (${partnerName})</h3>
+            <ul style="list-style-type: none; padding: 0; margin: 0; font-size: 14px;">
+              <li style="margin-bottom: 5px;">
+                <span style="font-weight: bold;">Endereço:</span> ${partnerData.location || 'Consulte o site do parceiro'}
+              </li>
+              <li style="margin-bottom: 5px;">
+                <span style="font-weight: bold;">Telefone:</span> ${partnerData.phone || 'Não disponível'}
+              </li>
+              <li style="margin-bottom: 15px;">
+                <span style="font-weight: bold;">E-mail do Parceiro:</span> ${partnerData.email || 'Não disponível'}
+              </li>
+            </ul>
+          </td>
+        </tr>
+        
         <tr>
           <td style="padding:10px 0 20px;text-align:center;">
             <a href="${validateUrl}" target="_blank">
@@ -149,7 +209,6 @@ const html = `
           </td>
         </tr>
 
-        <!-- Button -->
         <tr>
           <td align="center" style="padding:0 20px 30px;">
             <a href="${validateUrl}"
@@ -159,7 +218,6 @@ const html = `
           </td>
         </tr>
 
-        <!-- Footer -->
         <tr>
           <td style="background:#f7f7f7;padding:15px;text-align:center;color:#777;font-size:12px;">
             VoucherHub © ${new Date().getFullYear()} — Todos os direitos reservados.
@@ -170,12 +228,11 @@ const html = `
   </tr>
 </table>
 `;
-
       
-      // Assumindo que a função sendEmail está configurada corretamente com SMTP_USER/PASS
+      // Envia o email
       await sendEmail({
         to: email,
-        subject: 'Seu voucher VoucherHub',
+        subject: `🎉 O seu Voucher para ${partnerName} chegou!`,
         html
       });
 

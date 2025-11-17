@@ -4,6 +4,13 @@ import { pool } from '../src/db.js';
 
 async function run() {
   const statements = [
+    // ⚠️ ALTER TABLE para adicionar os novos campos. 
+    // Execute isto antes de tudo para garantir que a sua tabela está completa.
+    `ALTER TABLE partners ADD COLUMN IF NOT EXISTS location VARCHAR(255);`,
+    `ALTER TABLE partners ADD COLUMN IF NOT EXISTS price_original_cents INTEGER;`,
+    `ALTER TABLE partners ADD COLUMN IF NOT EXISTS voucher_validity_days INTEGER DEFAULT 20;`,
+    
+    // ATUALIZAÇÃO DA ESTRUTURA INICIAL (Se for um novo projeto)
     `
     CREATE TABLE IF NOT EXISTS partners (
       id SERIAL PRIMARY KEY,
@@ -11,31 +18,42 @@ async function run() {
       name VARCHAR(255) NOT NULL,
       email VARCHAR(255),
       phone VARCHAR(50),
+      location VARCHAR(255),  
+      price_original_cents INTEGER,  
+      voucher_validity_days INTEGER DEFAULT 20, 
       pin VARCHAR(10) NOT NULL,
       created_at TIMESTAMP DEFAULT NOW()
     );
     `,
-    // dados de exemplo (só insere se não existir)
+    
+    // Exemplo de atualização de dados (você deve ajustar os valores)
     `
-    INSERT INTO partners (slug, name, email, phone, pin) VALUES
-      ('yoga-kula', 'Yoga Kula Lisboa', 'contato@yogakula.pt', '+351900000001', '1234'),
-      ('surf-wave-lisbon', 'Surf Wave Lisbon', 'info@surfwave.pt', '+351900000002', '5678'),
-      ('caparica-kite-center', 'Caparica Kite Center', 'contact@caparikite.pt', '+351900000003', '2468'),
-      ('twolines', 'TwoLines Barber Shop', 'ola@twolines.pt', '+351900000004', '4321'),
-      ('sintra-quad-adventures', 'Sintra Quad Adventures', 'booking@sintraquad.pt', '+351900000005', '9999'),
-      ('espaco-libela', 'Espaço Libelã', 'info@libela.pt', '+351900000006', '5555')
-    ON CONFLICT (slug) DO NOTHING;
+    INSERT INTO partners (slug, name, email, phone, location, price_original_cents, voucher_validity_days, pin) VALUES
+      ('yoga-kula', 'Yoga Kula Lisboa', 'contato@yogakula.pt', '+351900000001', 'Rua da Paz, Lisboa', 5000, 20, '1234')
+    ON CONFLICT (slug) DO UPDATE SET 
+        location = EXCLUDED.location, 
+        price_original_cents = EXCLUDED.price_original_cents,
+        voucher_validity_days = EXCLUDED.voucher_validity_days;
+    `,
     `
+    INSERT INTO partners (slug, name, email, phone, location, price_original_cents, voucher_validity_days, pin) VALUES
+      ('surf-wave-lisbon', 'Surf Wave Lisbon', 'info@surfwave.pt', '+351900000002', 'Praia da Cova do Vapor, Caparica', 7000, 20, '5678')
+    ON CONFLICT (slug) DO UPDATE SET 
+        location = EXCLUDED.location, 
+        price_original_cents = EXCLUDED.price_original_cents,
+        voucher_validity_days = EXCLUDED.voucher_validity_days;
+    `,
+    // Adicione os outros parceiros com os novos dados...
   ];
 
   try {
     for (const sql of statements) {
-      console.log('[partners:migrate] running:', sql.split('\n')[1]?.trim() || sql);
+      console.log('[migrate] running:', sql.trim().split('\n')[0] + '...');
       await pool.query(sql);
     }
-    console.log('✅ Tabela partners criada/populada.');
+    console.log('✅ Migração concluída com sucesso.');
   } catch (err) {
-    console.error('❌ Erro na migração partners:', err);
+    console.error('❌ Erro na migração:', err);
   } finally {
     await pool.end();
     process.exit(0);
