@@ -68,7 +68,7 @@ router.post('/create-checkout-session', async (req, res) => {
       ],
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: { email, partnerSlug },
+      metadata: { email, partnerSlug, originalPriceCents },
 
       // 💰 Aqui acontece a divisão:
       // - cobrança inteira ocorre na SUA conta
@@ -138,7 +138,8 @@ router.post('/webhook', async (req, res) => {
       
       const partnerName = partnerData.name || partnerSlug;
       // Garante que usa o valor original do parceiro, mas fallback para o valor pago se não houver
-      const valorOriginal = partnerData.price_original_cents; 
+      const valorOriginal = Number(session.metadata.originalPriceCents);
+
       const daysValidity = partnerData.voucher_validity_days || 60; 
 
       // ------------------------------------------------------------------
