@@ -138,7 +138,7 @@ router.post('/webhook', async (req, res) => {
       
       const partnerName = partnerData.name || partnerSlug;
       // Garante que usa o valor original do parceiro, mas fallback para o valor pago se não houver
-      const valorOriginal = partnerData.price_original_cents || amountCents; 
+      const valorOriginal = partnerData.price_original_cents; 
       const daysValidity = partnerData.voucher_validity_days || 60; 
 
       // ------------------------------------------------------------------
