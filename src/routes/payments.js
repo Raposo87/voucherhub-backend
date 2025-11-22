@@ -224,17 +224,19 @@ const html = `
                   <p style="margin:4px 0 12px;font-size:22px;font-weight:bold;letter-spacing:2px;color:#1f2b6c;">
                     ${code}
                   </p>
-                  
-                  <p style="margin:0;font-size:14px;">✔ **Valor Original:** <span style="text-decoration: line-through;">${(valorOriginal/100).toFixed(2)} ${currency.toUpperCase()}</span></p>
+                  <p style="margin:0 0 12px;font-size:14px;">
+                    ✔ <b>Experiência adquirida:</b> ${productName}
+                  </p>
+                  <p style="margin:0;font-size:14px;">✔ Valor Original: <span style="text-decoration: line-through;">${(valorOriginal/100).toFixed(2)} ${currency.toUpperCase()}</span></p>
                   <p style="margin:4px 0 0;font-size:14px;">✔ **Valor Pago:** <span style="font-weight: bold;">${(valorPago/100).toFixed(2)} ${currency.toUpperCase()}</span></p>
-                  <p style="margin:4px 0 0;font-size:14px;">✔ **Desconto (%):** ${desconto}%</p>
-                  <p style="margin:4px 0 0;font-size:14px;">✔ **Quanto Economizou:** ${(economia/100).toFixed(2)} ${currency.toUpperCase()}</p>
+                  <p style="margin:4px 0 0;font-size:14px;">✔ Desconto (%): ${desconto}%</p>
+                  <p style="margin:4px 0 0;font-size:14px;">✔ Quanto Economizou: ${(economia/100).toFixed(2)} ${currency.toUpperCase()}</p>
                   
                   <p style="margin:12px 0 0;font-size:14px;font-weight:bold;color:#ff7f50;">
-                    ✔ **Validade:** ${validadeAviso}
+                    ✔ Validade: ${validadeAviso}
                   </p>
                   <p style="margin:4px 0 0;font-size:13px;color:#ef4444;">
-                    ✔ **Aviso de Expiração:** ${expiryWarning}
+                    ✔ Aviso de Expiração: ${expiryWarning}
                   </p>
                   
                 </td>
