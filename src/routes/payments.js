@@ -14,7 +14,7 @@ function generateVoucherCode() {
 // Create Stripe Checkout Session (com split 18% / 82%)
 router.post('/create-checkout-session', async (req, res) => {
   try {
-    const { email, partnerSlug, productName, amountCents, currency = 'eur' } = req.body;
+    const { email, partnerSlug, productName, amountCents, originalPriceCents, currency = 'eur' } = req.body;
 
     if (!email || !partnerSlug || !productName || !amountCents) {
       return res
