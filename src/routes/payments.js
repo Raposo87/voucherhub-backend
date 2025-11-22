@@ -68,7 +68,7 @@ router.post('/create-checkout-session', async (req, res) => {
       ],
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: { email, partnerSlug, originalPriceCents },
+      metadata: { email, partnerSlug, productName, originalPriceCents },
 
       // 💰 Aqui acontece a divisão:
       // - cobrança inteira ocorre na SUA conta
@@ -114,6 +114,7 @@ router.post('/webhook', async (req, res) => {
       
       const email = session.customer_details?.email || session.metadata?.email;
       const partnerSlug = session.metadata?.partnerSlug || 'partner';
+      const productName = session.metadata?.productName || "Experiência";
       const amountCents = session.amount_total || 0;
       const currency = session.currency || 'eur';
       const code = generateVoucherCode();
@@ -227,6 +228,7 @@ const html = `
                   <p style="margin:0 0 12px;font-size:14px;">
                     ✔ <b>Experiência adquirida:</b> ${productName}
                   </p>
+                  <p style="margin:0 0 12px;font-size:14px;">
                   <p style="margin:0;font-size:14px;">✔ Valor Original: <span style="text-decoration: line-through;">${(valorOriginal/100).toFixed(2)} ${currency.toUpperCase()}</span></p>
                   <p style="margin:4px 0 0;font-size:14px;">✔ **Valor Pago:** <span style="font-weight: bold;">${(valorPago/100).toFixed(2)} ${currency.toUpperCase()}</span></p>
                   <p style="margin:4px 0 0;font-size:14px;">✔ Desconto (%): ${desconto}%</p>
