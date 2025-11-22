@@ -230,7 +230,7 @@ const html = `
                   </p>
                   <p style="margin:0 0 12px;font-size:14px;">
                   <p style="margin:0;font-size:14px;">✔ Valor Original: <span style="text-decoration: line-through;">${(valorOriginal/100).toFixed(2)} ${currency.toUpperCase()}</span></p>
-                  <p style="margin:4px 0 0;font-size:14px;">✔ **Valor Pago:** <span style="font-weight: bold;">${(valorPago/100).toFixed(2)} ${currency.toUpperCase()}</span></p>
+                  <p style="margin:4px 0 0;font-size:14px;">✔ Valor Pago: <span style="font-weight: bold;">${(valorPago/100).toFixed(2)} ${currency.toUpperCase()}</span></p>
                   <p style="margin:4px 0 0;font-size:14px;">✔ Desconto (%): ${desconto}%</p>
                   <p style="margin:4px 0 0;font-size:14px;">✔ Quanto Economizou: ${(economia/100).toFixed(2)} ${currency.toUpperCase()}</p>
                   
@@ -278,14 +278,7 @@ const html = `
           </td>
         </tr>
 
-        <tr>
-          <td align="center" style="padding:0 20px 30px;">
-            <a href="${validateUrl}"
-               style="background:#ff7f50;color:white;text-decoration:none;padding:12px 25px;border-radius:6px;font-size:16px;font-weight:bold;display:inline-block;">
-              Validar Voucher
-            </a>
-          </td>
-        </tr>
+        
 
         <tr>
           <td style="background:#f7f7f7;padding:15px;text-align:center;color:#777;font-size:12px;">
