@@ -1,6 +1,6 @@
 import express from 'express';
 import bodyParser from 'body-parser';
-import cors from 'cors'; // <--- JÁ ESTÁ IMPORTADO!
+import cors from 'cors';
 import 'dotenv/config.js';
 
 import paymentsRouter from './routes/payments.js';
@@ -10,20 +10,21 @@ import { initDb } from './db.js';
 const app = express();
 
 // 🌐 CONFIGURAÇÃO CORS CORRETA:
-// Lista de origens permitidas (inclui 'voucherhub.pt' e 'www.voucherhub.pt')
+// Lista de origens permitidas (inclui seu ambiente local de desenvolvimento atual)
 const allowedOrigins = [
   'https://modest-comfort-production.up.railway.app',
   'https://voucherhub.pt',
   'https://www.voucherhub.pt',
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'http://localhost:5500', // <-- ADICIONADO: URL comum para Live Server
+  'http://127.0.0.1:5500' // <-- ADICIONADO: URL exata do seu erro
 ];
 
 // Configure as opções do CORS
 const corsOptions = {
     origin: allowedOrigins, // Usa a lista de origens que você já definiu
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS', // Inclui todos os métodos necessários
-    credentials: true, // Necessário para cookies, headers de autorização, etc.
-    // headers: 'Content-Type,Authorization', // O middleware CORS lida com Allowed-Headers automaticamente
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
 };
 
 // Aplica o middleware CORS ANTES DE QUALQUER ROTA
