@@ -210,7 +210,7 @@ router.post("/webhook", async (req, res) => {
     await sendEmail({
       to: email,
       // IMPORTANTE: Mude o campo FROM para o e-mail verificado na sua conta Resend/Sendgrid
-      from: 'seu-email-verificado@seudominio.pt', // <-- SUBSTITUIR AQUI!
+      from: 'info@voucherhub.pt', // <-- SUBSTITUIR AQUI!
       subject: `TESTE: Seu voucher para ${productName}`,
       html,
     });
