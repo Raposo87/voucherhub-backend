@@ -1,7 +1,7 @@
 import { Router } from "express";
 import Stripe from "stripe";
 import { pool } from "../db.js";
-import { sendEmail } from "./utils/sendEmail.js";
+import { sendEmail } from "../utils/sendEmail.js";
 import { randomBytes } from "crypto";
 
 const router = Router();
