@@ -29,8 +29,8 @@ router.post("/create-checkout-session", async (req, res) => {
       email,
       partnerSlug,
       productName,
-      amountCents,
-      originalPriceCents,
+      amountCents, // Este valor JÁ TEM o desconto padrão (ex: 1275 para 12.75€)
+      originalPriceCents, // Preço cheio (ex: 1500 para 15.00€)
       currency = "eur",
       sponsorCode: rawSponsorCode,
     } = req.body;
@@ -65,8 +65,7 @@ router.post("/create-checkout-session", async (req, res) => {
     if (!partner.stripe_account_id) {
       await client.query("ROLLBACK");
       return res.status(400).json({
-        error:
-          "Parceiro não tem stripe_account_id configurado — configure no banco.",
+        error: "Parceiro não tem stripe_account_id configurado — configure no banco.",
       });
     }
 
@@ -88,16 +87,12 @@ router.post("/create-checkout-session", async (req, res) => {
 
       if (voucher.used) {
         await client.query("ROLLBACK");
-        return res
-          .status(400)
-          .json({ error: "Este código especial já foi utilizado." });
+        return res.status(400).json({ error: "Este código especial já foi utilizado." });
       }
 
       if (!voucher.discount_extra || voucher.discount_extra <= 0) {
         await client.query("ROLLBACK");
-        return res
-          .status(400)
-          .json({ error: "Código especial não possui desconto ativo." });
+        return res.status(400).json({ error: "Código especial não possui desconto ativo." });
       }
 
       extraDiscount = voucher.discount_extra;
@@ -105,29 +100,35 @@ router.post("/create-checkout-session", async (req, res) => {
     }
 
     // ------------------------------------------------
-    // 3. Cálculo financeiro
+    // 3. Cálculo financeiro (LÓGICA CORRIGIDA)
     // ------------------------------------------------
-    const totalCents = Number(amountCents);
-    if (!Number.isFinite(totalCents) || totalCents <= 0) {
+    // O frontend manda o valor com desconto padrão (ex: 1275).
+    // Esse será nosso "Preço Base" para o cálculo do patrocinador.
+    const incomingCents = Number(amountCents);
+    
+    if (!Number.isFinite(incomingCents) || incomingCents <= 0) {
       await client.query("ROLLBACK");
       return res.status(400).json({ error: "amountCents inválido." });
     }
 
-    let baseAmountCents = totalCents;
+    let baseAmountCents = incomingCents; // Ex: 1275
+    let finalAmountToChargeCents = incomingCents; // Começa igual
     let applicationFeeCents;
     const platformPctOriginal = 0.18; // 18%
 
     if (extraDiscount > 0) {
-      // Recalcular o valor antes do desconto extra
-      const multiplier = 1 - extraDiscount / 100;
-      baseAmountCents = Math.round(totalCents / multiplier);
+      // APLICAR O DESCONTO EXTRA SOBRE O PREÇO JÁ DESCONTADO (COMPOSTO)
+      // Ex: 1275 * (1 - 0.05) = 1275 * 0.95 = 1211.25 -> 1211
+      const multiplier = 1 - (extraDiscount / 100);
+      finalAmountToChargeCents = Math.round(baseAmountCents * multiplier);
       
-      // Taxa da plataforma reduzida
-      const platformPctFinal = platformPctOriginal - extraDiscount / 100; 
+      // A comissão da plataforma absorve esse desconto extra
+      // A taxa é calculada sobre o BASE (1275), mas subtraída a % do patrocinador
+      const platformPctFinal = platformPctOriginal - (extraDiscount / 100); 
       applicationFeeCents = Math.round(baseAmountCents * platformPctFinal);
     } else {
-      applicationFeeCents = Math.round(totalCents * platformPctOriginal);
-      baseAmountCents = totalCents;
+      // Cliente normal
+      applicationFeeCents = Math.round(incomingCents * platformPctOriginal);
     }
     
     applicationFeeCents = Math.max(1, applicationFeeCents);
@@ -147,7 +148,7 @@ router.post("/create-checkout-session", async (req, res) => {
           price_data: {
             currency,
             product_data: { name: productName },
-            unit_amount: totalCents,
+            unit_amount: finalAmountToChargeCents, // Valor FINAL cobrado (1211)
           },
           quantity: 1,
         },
@@ -162,7 +163,7 @@ router.post("/create-checkout-session", async (req, res) => {
         sponsorCode: sponsorCode || "",
         extraDiscount,
         sponsorName: sponsorName || "",
-        baseAmountCents, 
+        baseAmountCents, // Guardamos o valor de 1275 aqui para o email
         platformPctOriginal: platformPctOriginal * 100,
       },
       payment_intent_data: {
@@ -213,20 +214,22 @@ router.post("/webhook", async (req, res) => {
     const sponsorCode = normalize(session.metadata?.sponsorCode);
     const extraDiscount = Number(session.metadata?.extraDiscount || 0);
     const sponsorName = session.metadata?.sponsorName || "";
+    
     const originalPriceCents = Number(session.metadata?.originalPriceCents || 0);
-
-    const amountCents = session.amount_total;
+    const baseAmountCents = Number(session.metadata?.baseAmountCents || session.amount_total);
+    const amountCents = session.amount_total; // O valor que foi realmente pago (1211)
     const currency = session.currency || "eur";
-    const baseAmountCents = Number(session.metadata?.baseAmountCents || amountCents);
 
-    // Cálculos para registro no banco
+    // Cálculos para comissão
     const platformPctOriginal = 0.18;
     let platformFeeCents;
     let partnerShareCents;
 
     if (extraDiscount > 0) {
       const platformPctFinal = platformPctOriginal - extraDiscount / 100;
+      // Taxa sobre o valor base (o valor que o parceiro esperava receber pedido sobre)
       platformFeeCents = Math.round(baseAmountCents * platformPctFinal);
+      // Parceiro recebe o valor pago MENOS a taxa reduzida da plataforma
       partnerShareCents = amountCents - platformFeeCents;
     } else {
       platformFeeCents = Math.round(amountCents * platformPctOriginal);
@@ -236,9 +239,7 @@ router.post("/webhook", async (req, res) => {
     // Criar código do voucher
     const code = generateVoucherCode();
 
-    // ------------------------------------------------------------
-    // 🛑 CORREÇÃO AQUI: REMOVIDO "discount_percent" DO SQL
-    // ------------------------------------------------------------
+    // Validade (sem buscar discount_percent para evitar erro de coluna)
     const partnerRes = await pool.query(
       "SELECT voucher_validity_days, name FROM partners WHERE slug = $1",
       [partnerSlug]
@@ -246,9 +247,6 @@ router.post("/webhook", async (req, res) => {
     const partner = partnerRes.rows[0] || {};
     const daysValidity = partner.voucher_validity_days || 60;
     
-    // Se não tem no banco, assumimos 15% apenas para exibição no e-mail
-    const partnerDiscount = 15; 
-
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + daysValidity);
 
@@ -282,53 +280,87 @@ router.post("/webhook", async (req, res) => {
     }
 
     // ------------------------------------------------------------
-    // ENVIAR EMAIL
+    // ENVIAR EMAIL COM QR CODE E CÁLCULOS CORRETOS
     // ------------------------------------------------------------
     const validateUrl = `${process.env.FRONTEND_URL}/validate.html?code=${code}`;
-    const amountPaidEuros = (amountCents / 100).toFixed(2);
-    const originalPriceEuros = (originalPriceCents / 100).toFixed(2);
     
-    let totalEconomyCents = originalPriceCents - amountCents;
-    const totalEconomyEuros = (totalEconomyCents / 100).toFixed(2);
+    // Gerar URL do QR Code (API pública, rápida e segura para emails)
+    // Encoda a URL de validação dentro do QR Code
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(validateUrl)}`;
+
+    const amountPaidEuros = (amountCents / 100).toFixed(2); // 12.11
+    const originalPriceEuros = (originalPriceCents / 100).toFixed(2); // 15.00
+    const totalEconomyEuros = ((originalPriceCents - amountCents) / 100).toFixed(2); // 2.89
     
+    // Percentual de desconto padrão aproximado para exibição
+    // (Original - Base) / Original * 100
+    const standardDiscPct = Math.round(((originalPriceCents - baseAmountCents) / originalPriceCents) * 100);
+
     let html;
 
     if (extraDiscount > 0) {
         // CLIENTE ESPECIAL
-        const baseAmountEuros = (baseAmountCents / 100).toFixed(2);
+        // Desconto Padrão em Euros (15.00 - 12.75 = 2.25)
         const partnerDiscountEuros = ((originalPriceCents - baseAmountCents) / 100).toFixed(2);
+        // Desconto Extra em Euros (12.75 - 12.11 = 0.64)
         const extraDiscountEuros = ((baseAmountCents - amountCents) / 100).toFixed(2);
         
         html = `
-            <h2>🎉 O seu voucher especial chegou!</h2>
-            <p>Olá,</p>
-            <p>Parabéns! Você adquiriu a seguinte experiência com seu código de patrocinador:</p>
-            <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
-                <tr><td style="padding: 8px; border: 1px solid #ddd;">Experiência:</td><td style="padding: 8px; border: 1px solid #ddd;">${productName}</td></tr>
-                <tr><td style="padding: 8px; border: 1px solid #ddd;">Preço Original:</td><td style="padding: 8px; border: 1px solid #ddd;">€${originalPriceEuros}</td></tr>
-                <tr><td style="padding: 8px; border: 1px solid #ddd;">✔ Desconto Padrão (~${partnerDiscount}%):</td><td style="padding: 8px; border: 1px solid #ddd; color: #cc0000;">- €${partnerDiscountEuros}</td></tr>
-                <tr><td style="padding: 8px; border: 1px solid #ddd;">✔ Desconto Patrocinador (+${extraDiscount}%):</td><td style="padding: 8px; border: 1px solid #ddd; color: #cc0000;">- €${extraDiscountEuros}</td></tr>
-                <tr><td style="padding: 8px; border: 1px solid #ddd;">Total Economizado:</td><td style="padding: 8px; border: 1px solid #ddd; color: #00AA00;">€${totalEconomyEuros}</td></tr>
-                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight:bold;">Valor Pago:</td><td style="padding: 8px; border: 1px solid #ddd; font-size: 1.1em;">€${amountPaidEuros}</td></tr>
-                <tr><td style="padding: 8px; border: 1px solid #ddd;">Patrocinador:</td><td style="padding: 8px; border: 1px solid #ddd;">${sponsorName}</td></tr>
-            </table>
-            <p>Código: <b style="font-size: 1.4em;">${code}</b></p>
-            <p>Use aqui: <a href="${validateUrl}">${validateUrl}</a></p>
+            <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
+                <div style="background-color: #000; color: #fff; padding: 20px; text-align: center;">
+                    <h2 style="margin:0;">🎉 Seu Voucher Especial!</h2>
+                </div>
+                <div style="padding: 20px;">
+                    <p>Olá,</p>
+                    <p>Você adquiriu a experiência <b>${productName}</b> com condições exclusivas de patrocinador.</p>
+                    
+                    <div style="text-align: center; margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 8px;">
+                        <img src="${qrCodeUrl}" alt="QR Code de Validação" style="width: 150px; height: 150px; border: 5px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                        <p style="margin-top: 10px; font-size: 14px; color: #555;">Mostre este código ao parceiro</p>
+                        <p style="font-size: 18px; font-weight: bold; margin: 5px 0;">${code}</p>
+                    </div>
+
+                    <table style="width:100%; border-collapse: collapse; margin-bottom: 20px;">
+                        <tr style="border-bottom: 1px solid #eee;"><td style="padding: 10px;">Preço Original:</td><td style="padding: 10px; text-align: right;">€${originalPriceEuros}</td></tr>
+                        <tr style="border-bottom: 1px solid #eee; color: #cc0000;"><td style="padding: 10px;">Desconto Padrão (~${standardDiscPct}%):</td><td style="padding: 10px; text-align: right;">- €${partnerDiscountEuros}</td></tr>
+                        <tr style="border-bottom: 1px solid #eee; color: #cc0000;"><td style="padding: 10px;">Desconto Patrocinador (+${extraDiscount}%):</td><td style="padding: 10px; text-align: right;">- €${extraDiscountEuros}</td></tr>
+                        <tr style="background-color: #f0fff4; color: #006400; font-weight: bold;"><td style="padding: 10px;">Valor Pago:</td><td style="padding: 10px; text-align: right;">€${amountPaidEuros}</td></tr>
+                    </table>
+                    
+                    <p style="text-align: center; font-size: 0.9em; color: #777;">
+                        <a href="${validateUrl}" style="color: #007bff; text-decoration: none;">Link de validação manual</a>
+                    </p>
+                </div>
+            </div>
         `;
     } else {
         // CLIENTE NORMAL
         html = `
-            <h2>🎉 O seu voucher chegou!</h2>
-            <p>Olá,</p>
-            <p>Você adquiriu a seguinte experiência:</p>
-            <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
-                <tr><td style="padding: 8px; border: 1px solid #ddd;">Experiência:</td><td style="padding: 8px; border: 1px solid #ddd;">${productName}</td></tr>
-                <tr><td style="padding: 8px; border: 1px solid #ddd;">Preço Original:</td><td style="padding: 8px; border: 1px solid #ddd;">€${originalPriceEuros}</td></tr>
-                <tr><td style="padding: 8px; border: 1px solid #ddd;">Total Economizado:</td><td style="padding: 8px; border: 1px solid #ddd; color: #00AA00;">€${totalEconomyEuros}</td></tr>
-                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight:bold;">Valor Pago:</td><td style="padding: 8px; border: 1px solid #ddd; font-size: 1.1em;">€${amountPaidEuros}</td></tr>
-            </table>
-            <p>Código: <b style="font-size: 1.4em;">${code}</b></p>
-            <p>Use aqui: <a href="${validateUrl}">${validateUrl}</a></p>
+            <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
+                <div style="background-color: #000; color: #fff; padding: 20px; text-align: center;">
+                    <h2 style="margin:0;">🎉 Seu Voucher Chegou!</h2>
+                </div>
+                <div style="padding: 20px;">
+                    <p>Olá,</p>
+                    <p>Você adquiriu a experiência <b>${productName}</b>.</p>
+                    
+                    <div style="text-align: center; margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 8px;">
+                        <img src="${qrCodeUrl}" alt="QR Code de Validação" style="width: 150px; height: 150px; border: 5px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                        <p style="margin-top: 10px; font-size: 14px; color: #555;">Mostre este código ao parceiro</p>
+                        <p style="font-size: 18px; font-weight: bold; margin: 5px 0;">${code}</p>
+                    </div>
+
+                    <table style="width:100%; border-collapse: collapse; margin-bottom: 20px;">
+                        <tr style="border-bottom: 1px solid #eee;"><td style="padding: 10px;">Preço Original:</td><td style="padding: 10px; text-align: right;">€${originalPriceEuros}</td></tr>
+                        <tr style="border-bottom: 1px solid #eee; color: #cc0000;"><td style="padding: 10px;">Desconto Padrão (~${standardDiscPct}%):</td><td style="padding: 10px; text-align: right;">- €${totalEconomyEuros}</td></tr>
+                        <tr style="background-color: #f0fff4; color: #006400; font-weight: bold;"><td style="padding: 10px;">Valor Pago:</td><td style="padding: 10px; text-align: right;">€${amountPaidEuros}</td></tr>
+                    </table>
+                    
+                     <p style="text-align: center; font-size: 0.9em; color: #777;">
+                        <a href="${validateUrl}" style="color: #007bff; text-decoration: none;">Link de validação manual</a>
+                    </p>
+                </div>
+            </div>
         `;
     }
 
