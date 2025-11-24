@@ -310,9 +310,7 @@ router.post("/webhook", async (req, res) => {
             <div style="display: inline-block; padding: 15px; background: #ffffff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                 <img src="${qrCodeUrl}" alt="QR Code" style="width: 200px; height: 200px; display: block;">
             </div>
-            <p style="margin: 15px 0 5px 0; font-size: 14px; color: #666; font-weight: 500;">SEU CÓDIGO VOUCHER</p>
-            <p style="margin: 0; font-size: 24px; font-weight: bold; color: #667eea; letter-spacing: 2px;">${code}</p>
-            <p style="margin: 10px 0 0 0; font-size: 13px; color: #888;">Apresente este código ao parceiro</p>
+            <p style="margin: 10px 0 0 0; font-size: 15px; font-weight: 600; color: #666;">Apresente este QR Code ao parceiro para validação.</p>
         </div>
 
         <div style="padding: 0 30px 20px 30px;">
@@ -411,9 +409,7 @@ router.post("/webhook", async (req, res) => {
             <div style="display: inline-block; padding: 15px; background: #ffffff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                 <img src="${qrCodeUrl}" alt="QR Code" style="width: 200px; height: 200px; display: block;">
             </div>
-            <p style="margin: 15px 0 5px 0; font-size: 14px; color: #666; font-weight: 500;">SEU CÓDIGO VOUCHER</p>
-            <p style="margin: 0; font-size: 24px; font-weight: bold; color: #667eea; letter-spacing: 2px;">${code}</p>
-            <p style="margin: 10px 0 0 0; font-size: 13px; color: #888;">Apresente este código ao parceiro</p>
+            <p style="margin: 10px 0 0 0; font-size: 15px; font-weight: 600; color: #666;">Apresente este QR Code ao parceiro para validação.</p>
         </div>
 
         <div style="padding: 0 30px 20px 30px;">
