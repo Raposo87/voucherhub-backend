@@ -224,3 +224,5 @@ router.post("/webhook", async (req, res) => {
     return res.status(500).json({ error: "Erro processando webhook no teste" });
   }
 });
+
+export default router; 
