@@ -1,9 +1,7 @@
 import { Router } from "express";
 import Stripe from "stripe";
 import { pool } from "../db.js";
-// Nota: O import de sendEmail precisa ser resolvido se o caminho for diferente, 
-// mas vou manter o que está no seu payments.js
-import { sendEmail } from "./utils/sendEmail.js"; 
+import { sendEmail } from "../utils/sendEmail.js"; 
 import { randomBytes } from "crypto";
 
 const router = Router();
