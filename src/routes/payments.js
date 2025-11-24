@@ -29,8 +29,8 @@ router.post("/create-checkout-session", async (req, res) => {
       email,
       partnerSlug,
       productName,
-      amountCents, // Este valor JÁ TEM o desconto padrão (ex: 1275 para 12.75€)
-      originalPriceCents, // Preço cheio (ex: 1500 para 15.00€)
+      amountCents, 
+      originalPriceCents,
       currency = "eur",
       sponsorCode: rawSponsorCode,
     } = req.body;
@@ -47,9 +47,7 @@ router.post("/create-checkout-session", async (req, res) => {
     
     await client.query("BEGIN");
 
-    // -----------------------------------------------
-    // 1. Buscar parceiro
-    // -----------------------------------------------
+    // Busca parceiro e validações (INALTERADO)
     const partnerRes = await client.query(
       "SELECT stripe_account_id FROM partners WHERE slug=$1",
       [partnerSlug]
@@ -69,9 +67,7 @@ router.post("/create-checkout-session", async (req, res) => {
       });
     }
 
-    // ------------------------------------------------
-    // 2. Validar sponsorCode
-    // ------------------------------------------------
+    // Validar sponsorCode (INALTERADO)
     if (sponsorCode) {
       const { rows } = await client.query(
         "SELECT * FROM sponsor_vouchers WHERE code = $1",
@@ -99,11 +95,7 @@ router.post("/create-checkout-session", async (req, res) => {
       sponsorName = voucher.sponsor;
     }
 
-    // ------------------------------------------------
-    // 3. Cálculo financeiro (LÓGICA CORRIGIDA)
-    // ------------------------------------------------
-    // O frontend manda o valor com desconto padrão (ex: 1275).
-    // Esse será nosso "Preço Base" para o cálculo do patrocinador.
+    // Cálculo financeiro (INALTERADO - Lógica composta)
     const incomingCents = Number(amountCents);
     
     if (!Number.isFinite(incomingCents) || incomingCents <= 0) {
@@ -111,31 +103,23 @@ router.post("/create-checkout-session", async (req, res) => {
       return res.status(400).json({ error: "amountCents inválido." });
     }
 
-    let baseAmountCents = incomingCents; // Ex: 1275
-    let finalAmountToChargeCents = incomingCents; // Começa igual
+    let baseAmountCents = incomingCents; 
+    let finalAmountToChargeCents = incomingCents; 
     let applicationFeeCents;
-    const platformPctOriginal = 0.18; // 18%
+    const platformPctOriginal = 0.18; 
 
     if (extraDiscount > 0) {
-      // APLICAR O DESCONTO EXTRA SOBRE O PREÇO JÁ DESCONTADO (COMPOSTO)
-      // Ex: 1275 * (1 - 0.05) = 1275 * 0.95 = 1211.25 -> 1211
       const multiplier = 1 - (extraDiscount / 100);
       finalAmountToChargeCents = Math.round(baseAmountCents * multiplier);
-      
-      // A comissão da plataforma absorve esse desconto extra
-      // A taxa é calculada sobre o BASE (1275), mas subtraída a % do patrocinador
       const platformPctFinal = platformPctOriginal - (extraDiscount / 100); 
       applicationFeeCents = Math.round(baseAmountCents * platformPctFinal);
     } else {
-      // Cliente normal
       applicationFeeCents = Math.round(incomingCents * platformPctOriginal);
     }
     
     applicationFeeCents = Math.max(1, applicationFeeCents);
 
-    // ------------------------------------------------
-    // 4. Criar sessão Stripe
-    // ------------------------------------------------
+    // Criar sessão Stripe (INALTERADO)
     const successUrl = `${process.env.FRONTEND_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${process.env.FRONTEND_URL}/cancel.html`;
 
@@ -148,7 +132,7 @@ router.post("/create-checkout-session", async (req, res) => {
           price_data: {
             currency,
             product_data: { name: productName },
-            unit_amount: finalAmountToChargeCents, // Valor FINAL cobrado (1211)
+            unit_amount: finalAmountToChargeCents,
           },
           quantity: 1,
         },
@@ -163,7 +147,7 @@ router.post("/create-checkout-session", async (req, res) => {
         sponsorCode: sponsorCode || "",
         extraDiscount,
         sponsorName: sponsorName || "",
-        baseAmountCents, // Guardamos o valor de 1275 aqui para o email
+        baseAmountCents, 
         platformPctOriginal: platformPctOriginal * 100,
       },
       payment_intent_data: {
@@ -186,7 +170,7 @@ router.post("/create-checkout-session", async (req, res) => {
 });
 
 // ==========================================================
-// 2) STRIPE WEBHOOK
+// 2) STRIPE WEBHOOK (QR CODE COM LOGO)
 // ==========================================================
 router.post("/webhook", async (req, res) => {
   let event;
@@ -217,7 +201,7 @@ router.post("/webhook", async (req, res) => {
     
     const originalPriceCents = Number(session.metadata?.originalPriceCents || 0);
     const baseAmountCents = Number(session.metadata?.baseAmountCents || session.amount_total);
-    const amountCents = session.amount_total; // O valor que foi realmente pago (1211)
+    const amountCents = session.amount_total;
     const currency = session.currency || "eur";
 
     // Cálculos para comissão
@@ -227,19 +211,15 @@ router.post("/webhook", async (req, res) => {
 
     if (extraDiscount > 0) {
       const platformPctFinal = platformPctOriginal - extraDiscount / 100;
-      // Taxa sobre o valor base (o valor que o parceiro esperava receber pedido sobre)
       platformFeeCents = Math.round(baseAmountCents * platformPctFinal);
-      // Parceiro recebe o valor pago MENOS a taxa reduzida da plataforma
       partnerShareCents = amountCents - platformFeeCents;
     } else {
       platformFeeCents = Math.round(amountCents * platformPctOriginal);
       partnerShareCents = amountCents - platformFeeCents;
     }
 
-    // Criar código do voucher
     const code = generateVoucherCode();
 
-    // Validade (sem buscar discount_percent para evitar erro de coluna)
     const partnerRes = await pool.query(
       "SELECT voucher_validity_days, name FROM partners WHERE slug = $1",
       [partnerSlug]
@@ -250,7 +230,6 @@ router.post("/webhook", async (req, res) => {
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + daysValidity);
 
-    // Inserir Voucher
     await pool.query(
       `INSERT INTO vouchers (
         email, partner_slug, code, amount_cents, currency, 
@@ -269,7 +248,6 @@ router.post("/webhook", async (req, res) => {
       ]
     );
 
-    // Marcar sponsorCode como usado
     if (sponsorCode && extraDiscount > 0) {
       await pool.query(
         `UPDATE sponsor_vouchers 
@@ -280,29 +258,31 @@ router.post("/webhook", async (req, res) => {
     }
 
     // ------------------------------------------------------------
-    // ENVIAR EMAIL COM QR CODE E CÁLCULOS CORRETOS
+    // QR CODE COM LOGO (QuickChart.io)
     // ------------------------------------------------------------
     const validateUrl = `${process.env.FRONTEND_URL}/validate.html?code=${code}`;
     
-    // Gerar URL do QR Code (API pública, rápida e segura para emails)
-    // Encoda a URL de validação dentro do QR Code
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(validateUrl)}`;
+    // URL do seu logo (assumindo que logo.png está na raiz do seu site)
+    const logoUrl = `${process.env.FRONTEND_URL}/logo.png`; 
 
-    const amountPaidEuros = (amountCents / 100).toFixed(2); // 12.11
-    const originalPriceEuros = (originalPriceCents / 100).toFixed(2); // 15.00
-    const totalEconomyEuros = ((originalPriceCents - amountCents) / 100).toFixed(2); // 2.89
-    
-    // Percentual de desconto padrão aproximado para exibição
-    // (Original - Base) / Original * 100
+    // Parâmetros do QuickChart:
+    // ecLevel=H (Alta tolerância a erros, necessário quando se põe imagem no meio)
+    // margin=2 (Margem branca ao redor do QR code)
+    // size=300 (Tamanho da imagem)
+    // centerImageUrl = Sua logo
+    const qrCodeUrl = `https://quickchart.io/qr?text=${encodeURIComponent(validateUrl)}&centerImageUrl=${encodeURIComponent(logoUrl)}&size=300&ecLevel=H&margin=2`;
+
+    const amountPaidEuros = (amountCents / 100).toFixed(2);
+    const originalPriceEuros = (originalPriceCents / 100).toFixed(2);
+    const totalEconomyEuros = ((originalPriceCents - amountCents) / 100).toFixed(2);
     const standardDiscPct = Math.round(((originalPriceCents - baseAmountCents) / originalPriceCents) * 100);
 
     let html;
 
+    // Template de Email (Mesma estrutura, apenas a URL da imagem mudou)
     if (extraDiscount > 0) {
         // CLIENTE ESPECIAL
-        // Desconto Padrão em Euros (15.00 - 12.75 = 2.25)
         const partnerDiscountEuros = ((originalPriceCents - baseAmountCents) / 100).toFixed(2);
-        // Desconto Extra em Euros (12.75 - 12.11 = 0.64)
         const extraDiscountEuros = ((baseAmountCents - amountCents) / 100).toFixed(2);
         
         html = `
@@ -315,7 +295,7 @@ router.post("/webhook", async (req, res) => {
                     <p>Você adquiriu a experiência <b>${productName}</b> com condições exclusivas de patrocinador.</p>
                     
                     <div style="text-align: center; margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 8px;">
-                        <img src="${qrCodeUrl}" alt="QR Code de Validação" style="width: 150px; height: 150px; border: 5px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                        <img src="${qrCodeUrl}" alt="QR Code de Validação" style="width: 200px; height: 200px; border: 5px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
                         <p style="margin-top: 10px; font-size: 14px; color: #555;">Mostre este código ao parceiro</p>
                         <p style="font-size: 18px; font-weight: bold; margin: 5px 0;">${code}</p>
                     </div>
@@ -345,7 +325,7 @@ router.post("/webhook", async (req, res) => {
                     <p>Você adquiriu a experiência <b>${productName}</b>.</p>
                     
                     <div style="text-align: center; margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 8px;">
-                        <img src="${qrCodeUrl}" alt="QR Code de Validação" style="width: 150px; height: 150px; border: 5px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                        <img src="${qrCodeUrl}" alt="QR Code de Validação" style="width: 200px; height: 200px; border: 5px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
                         <p style="margin-top: 10px; font-size: 14px; color: #555;">Mostre este código ao parceiro</p>
                         <p style="font-size: 18px; font-weight: bold; margin: 5px 0;">${code}</p>
                     </div>
