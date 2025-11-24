@@ -1,7 +1,7 @@
 import { Router } from "express";
 import Stripe from "stripe";
 import { pool } from "../db.js";
-import { sendEmail } from "../utils/sendEmail.js"; 
+import { sendEmail } from "../utils/sendEmail.js"; // CONFIRA SEMPRE ESTE CAMINHO!
 import { randomBytes } from "crypto";
 
 const router = Router();
@@ -19,7 +19,7 @@ function normalize(code) {
 }
 
 // ==========================================================
-// 1) CREATE CHECKOUT SESSION (com suporte a sponsorCode)
+// 1) CREATE CHECKOUT SESSION (Seu código original mantido)
 // ==========================================================
 router.post("/create-checkout-session", async (req, res) => {
   const client = await pool.connect();
@@ -40,16 +40,14 @@ router.post("/create-checkout-session", async (req, res) => {
         error: "Missing fields: email, partnerSlug, productName, amountCents",
       });
     }
-
+    // ... (restante do seu código CREATE CHECKOUT SESSION) ...
     const sponsorCode = normalize(rawSponsorCode);
     let extraDiscount = 0;
     let sponsorName = null;
 
     await client.query("BEGIN");
 
-    // -----------------------------------------------
     // 1. Buscar parceiro
-    // -----------------------------------------------
     const partnerRes = await client.query(
       "SELECT stripe_account_id FROM partners WHERE slug=$1",
       [partnerSlug]
@@ -70,9 +68,7 @@ router.post("/create-checkout-session", async (req, res) => {
       });
     }
 
-    // ------------------------------------------------
     // 2. Validar sponsorCode
-    // ------------------------------------------------
     if (sponsorCode) {
       const { rows } = await client.query(
         "SELECT * FROM sponsor_vouchers WHERE code = $1",
@@ -104,9 +100,7 @@ router.post("/create-checkout-session", async (req, res) => {
       sponsorName = voucher.sponsor;
     }
 
-    // ------------------------------------------------
     // 3. Cálculo financeiro
-    // ------------------------------------------------
     const incomingCents = Number(amountCents);
     
     if (!Number.isFinite(incomingCents) || incomingCents <= 0) {
@@ -130,10 +124,7 @@ router.post("/create-checkout-session", async (req, res) => {
     
     applicationFeeCents = Math.max(1, applicationFeeCents);
 
-
-    // ------------------------------------------------
     // 4. Criar sessão Stripe
-    // ------------------------------------------------
     const successUrl = `${process.env.FRONTEND_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${process.env.FRONTEND_URL}/cancel.html`;
 
@@ -188,7 +179,7 @@ router.post("/create-checkout-session", async (req, res) => {
 });
 
 // ==========================================================
-// 2) STRIPE WEBHOOK (QR CODE COM LOGO) - RESTAURADO
+// 2) STRIPE WEBHOOK (COM QR CODE SIMPLES E TEMPLATE ANTI-SPAM)
 // ==========================================================
 router.post("/webhook", async (req, res) => {
   let event;
@@ -269,100 +260,67 @@ router.post("/webhook", async (req, res) => {
     if (sponsorCode && extraDiscount > 0) {
       await pool.query(
         `UPDATE sponsor_vouchers 
-         SET used = TRUE, used_at = NOW()
-         WHERE code=$1 AND used=FALSE`,
+          SET used = TRUE, used_at = NOW()
+          WHERE code=$1 AND used=FALSE`,
         [sponsorCode]
       );
     }
 
     // ------------------------------------------------------------
-    // QR CODE COM LOGO (QuickChart.io) - RESTAURADO
+    // 🛑 QR CODE SIMPLES (Anti-Spam)
     // ------------------------------------------------------------
     const validateUrl = `${process.env.FRONTEND_URL}/validate.html?code=${code}`;
     
-    // URL do seu logo (assumindo que logo.png está na raiz do seu site)
-    const logoUrl = `${process.env.FRONTEND_URL}/logo.png`; 
-
-    // QuickChart URL com parâmetros para logo (centerImageUrl) e alta correção de erro (ecLevel=H)
-    const qrCodeUrl = `https://quickchart.io/qr?text=${encodeURIComponent(validateUrl)}&centerImageUrl=${encodeURIComponent(logoUrl)}&size=300&ecLevel=H&margin=2`;
+    // QR Code Simples sem logo
+    const qrCodeUrl = `https://quickchart.io/qr?text=${encodeURIComponent(validateUrl)}&size=300&ecLevel=H&margin=1`;
 
     const amountPaidEuros = (amountCents / 100).toFixed(2);
     const originalPriceEuros = (originalPriceCents / 100).toFixed(2);
     const totalEconomyCents = originalPriceCents - amountCents;
+    const totalEconomyEuros = (totalEconomyCents / 100).toFixed(2);
     const standardDiscPct = Math.round(((originalPriceCents - baseAmountCents) / originalPriceCents) * 100);
 
     let html;
 
-    // Template de Email (Mesma estrutura, apenas a URL da imagem mudou)
-    if (extraDiscount > 0) {
-        // CLIENTE ESPECIAL
-        const partnerDiscountEuros = ((originalPriceCents - baseAmountCents) / 100).toFixed(2);
-        const extraDiscountEuros = ((baseAmountCents - amountCents) / 100).toFixed(2);
-        
-        html = `
-            <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
-                <div style="background-color: #000; color: #fff; padding: 20px; text-align: center;">
-                    <h2 style="margin:0;">🎉 Seu Voucher Especial!</h2>
-                </div>
-                <div style="padding: 20px;">
-                    <p>Olá,</p>
-                    <p>Você adquiriu a experiência <b>${productName}</b> com condições exclusivas de patrocinador.</p>
-                    
-                    <div style="text-align: center; margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 8px;">
-                        <img src="${qrCodeUrl}" alt="QR Code de Validação" style="width: 200px; height: 200px; border: 5px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                        <p style="margin-top: 10px; font-size: 14px; color: #555;">Mostre este código ao parceiro</p>
-                        <p style="font-size: 18px; font-weight: bold; margin: 5px 0;">${code}</p>
-                    </div>
+    // ------------------------------------------------------------
+    // 🛑 TEMPLATE DE EMAIL SIMPLIFICADO (Anti-Spam)
+    // ------------------------------------------------------------
+    const discountInfo = extraDiscount > 0 
+        ? `<p style="color:#D35400; font-weight:bold; margin-top:15px;">✅ Desconto Especial Patrocinador (${extraDiscount}%) aplicado!</p>`
+        : '';
 
-                    <table style="width:100%; border-collapse: collapse; margin-bottom: 20px;">
-                        <tr style="border-bottom: 1px solid #eee;"><td style="padding: 10px;">Preço Original:</td><td style="padding: 10px; text-align: right;">€${originalPriceEuros}</td></tr>
-                        <tr style="border-bottom: 1px solid #eee; color: #cc0000;"><td style="padding: 10px;">Desconto Padrão (~${standardDiscPct}%):</td><td style="padding: 10px; text-align: right;">- €${partnerDiscountEuros}</td></tr>
-                        <tr style="border-bottom: 1px solid #eee; color: #cc0000;"><td style="padding: 10px;">Desconto Patrocinador (+${extraDiscount}%):</td><td style="padding: 10px; text-align: right;">- €${extraDiscountEuros}</td></tr>
-                        <tr style="background-color: #f0fff4; color: #006400; font-weight: bold;"><td style="padding: 10px;">Valor Pago:</td><td style="padding: 10px; text-align: right;">€${amountPaidEuros}</td></tr>
-                    </table>
-                    
-                    <p style="text-align: center; font-size: 0.9em; color: #777;">
-                        <a href="${validateUrl}" style="color: #007bff; text-decoration: none;">Link de validação manual</a>
-                    </p>
-                </div>
+    html = `
+        <div style="font-family: sans-serif; max-width: 500px; margin: auto; border: 1px solid #ccc; border-radius: 8px;">
+            <div style="background-color: #000; color: #fff; padding: 15px; text-align: center; border-radius: 8px 8px 0 0;">
+                <h2 style="margin:0;">Voucher para ${partner.name || 'Sua Experiência'}</h2>
             </div>
-        `;
-    } else {
-        // CLIENTE NORMAL
-        const totalEconomyEuros = (totalEconomyCents / 100).toFixed(2);
-
-        html = `
-            <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
-                <div style="background-color: #000; color: #fff; padding: 20px; text-align: center;">
-                    <h2 style="margin:0;">🎉 Seu Voucher Chegou!</h2>
+            <div style="padding: 20px; text-align: center;">
+                <p style="font-size: 1.1em;">Obrigado por adquirir <b>${productName}</b>.</p>
+                
+                <div style="margin: 25px 0; border: 1px solid #eee; padding: 15px; border-radius: 5px; background: #f9f9f9;">
+                    <p style="font-size: 1.2em; margin: 0 0 10px 0; color: #555;">Código de Validação:</p>
+                    <p style="font-size: 2em; font-weight: bold; color: #006400; margin: 0;">${code}</p>
+                    <img src="${qrCodeUrl}" alt="QR Code" style="width: 150px; height: 150px; margin-top: 15px; border: 1px solid #ddd; padding: 5px;">
+                    <p style="font-size: 0.8em; color: #777; margin-top: 5px;">Aponte a câmara para validar.</p>
                 </div>
-                <div style="padding: 20px;">
-                    <p>Olá,</p>
-                    <p>Você adquiriu a experiência <b>${productName}</b>.</p>
-                    
-                    <div style="text-align: center; margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 8px;">
-                        <img src="${qrCodeUrl}" alt="QR Code de Validação" style="width: 200px; height: 200px; border: 5px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                        <p style="margin-top: 10px; font-size: 14px; color: #555;">Mostre este código ao parceiro</p>
-                        <p style="font-size: 18px; font-weight: bold; margin: 5px 0;">${code}</p>
-                    </div>
-
-                    <table style="width:100%; border-collapse: collapse; margin-bottom: 20px;">
-                        <tr style="border-bottom: 1px solid #eee;"><td style="padding: 10px;">Preço Original:</td><td style="padding: 10px; text-align: right;">€${originalPriceEuros}</td></tr>
-                        <tr style="border-bottom: 1px solid #eee; color: #cc0000;"><td style="padding: 10px;">Desconto Padrão (~${standardDiscPct}%):</td><td style="padding: 10px; text-align: right;">- €${totalEconomyEuros}</td></tr>
-                        <tr style="background-color: #f0fff4; color: #006400; font-weight: bold;"><td style="padding: 10px;">Valor Pago:</td><td style="padding: 10px; text-align: right;">€${amountPaidEuros}</td></tr>
-                    </table>
-                    
-                     <p style="text-align: center; font-size: 0.9em; color: #777;">
-                        <a href="${validateUrl}" style="color: #007bff; text-decoration: none;">Link de validação manual</a>
-                    </p>
-                </div>
+                
+                <table style="width:100%; text-align:left; font-size: 0.9em; margin-bottom: 20px;">
+                    <tr><td style="padding: 5px 0;">Preço Original:</td><td style="padding: 5px 0; text-align:right;">€${originalPriceEuros}</td></tr>
+                    <tr><td style="padding: 5px 0;">Desconto Total:</td><td style="padding: 5px 0; text-align:right; color:#CC0000;">- €${totalEconomyEuros}</td></tr>
+                    <tr style="font-weight:bold; background:#e8ffe8;"><td style="padding: 5px 0;">Total Pago:</td><td style="padding: 5px 0; text-align:right; color:#006400;">€${amountPaidEuros}</td></tr>
+                </table>
+                
+                ${discountInfo}
+                
+                <p style="margin-top: 30px;">Validade: ${expiryDate.toLocaleDateString('pt-PT')}</p>
+                <p style="font-size: 0.9em;"><a href="${validateUrl}">Link de Validação Manual</a></p>
             </div>
-        `;
-    }
+        </div>
+    `;
 
     await sendEmail({
       to: email,
-      subject: `Seu voucher para ${productName}`,
+      subject: `Seu Voucher para ${partner.name} - ${productName}`,
       html,
     });
 
