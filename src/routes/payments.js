@@ -127,6 +127,17 @@ router.post("/create-checkout-session", async (req, res) => {
     }
     
     applicationFeeCents = Math.max(1, applicationFeeCents);
+    
+    // 🔴 NOVO: Calcular a percentagem total de desconto e criar nome descritivo
+    const originalPriceCentsNum = Number(originalPriceCents);
+    const totalDiscountCents = originalPriceCentsNum - finalAmountToChargeCents;
+    const totalDiscountPct = originalPriceCentsNum > 0
+        ? Math.round((totalDiscountCents / originalPriceCentsNum) * 100)
+        : 0;
+
+    const originalPriceEuros = (originalPriceCentsNum / 100).toFixed(2);
+    
+    const descriptiveProductName = `[Voucher - ${productName}] Preço Original: €${originalPriceEuros} | Total Desconto: ${totalDiscountPct}%`;
 
     // 4. Criar sessão Stripe
     const successUrl = `${process.env.FRONTEND_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`;
