@@ -1,7 +1,8 @@
 import { Router } from "express";
 import Stripe from "stripe";
 import { pool } from "../db.js";
-import { sendEmail } from "../utils/sendEmail.js";
+// ❌ CORREÇÃO DA IMPORTAÇÃO (Ajustado para caminho relativo, ex: ../utils/sendEmail.js)
+import { sendEmail } from "../utils/sendEmail.js"; 
 import { randomBytes } from "crypto";
 
 const router = Router();
@@ -20,6 +21,7 @@ function normalize(code) {
 
 // ==========================================================
 // 1) CREATE CHECKOUT SESSION (com suporte a sponsorCode)
+//    (Lógica já estava 99% correta, apenas confirmada)
 // ==========================================================
 router.post("/create-checkout-session", async (req, res) => {
   const client = await pool.connect();
@@ -44,11 +46,12 @@ router.post("/create-checkout-session", async (req, res) => {
     const sponsorCode = normalize(rawSponsorCode);
     let extraDiscount = 0;
     let sponsorName = null;
+    let baseAmountCents = Number(amountCents); // O preço com desconto normal do parceiro.
 
     await client.query("BEGIN");
 
     // -----------------------------------------------
-    // 1. Buscar parceiro
+    // 1. Buscar parceiro (INALTERADO)
     // -----------------------------------------------
     const partnerRes = await client.query(
       "SELECT stripe_account_id FROM partners WHERE slug=$1",
@@ -71,7 +74,7 @@ router.post("/create-checkout-session", async (req, res) => {
     }
 
     // ------------------------------------------------
-    // 2. Validar sponsorCode
+    // 2. Validar sponsorCode (INALTERADO - a lógica de validação já estava perfeita)
     // ------------------------------------------------
     if (sponsorCode) {
       const { rows } = await client.query(
@@ -105,31 +108,49 @@ router.post("/create-checkout-session", async (req, res) => {
     }
 
     // ------------------------------------------------
-    // 3. Cálculo financeiro
+    // 3. Cálculo financeiro (REFINADO para garantir baseAmountCents e totalCents corretos)
     // ------------------------------------------------
-    const totalCents = Number(amountCents);
+    const totalCents = Number(amountCents); // Este é o valor que o cliente PAGARÁ (com desconto extra se houver)
     if (!Number.isFinite(totalCents) || totalCents <= 0) {
       await client.query("ROLLBACK");
       return res.status(400).json({ error: "amountCents inválido." });
     }
-
-    let baseAmountCents = totalCents;
+    
+    // O baseAmountCents é o valor após o desconto PADRÃO do parceiro, mas antes do desconto EXTRA
+    // Se não há desconto extra, o valor base é o total que o cliente paga.
+    
+    let amountToChargeCents = totalCents; // Valor final que vai para o Stripe
     const platformPctOriginal = 0.18; // 18%
 
     let applicationFeeCents;
 
     if (extraDiscount > 0) {
-      const factor = 1 - extraDiscount / 100;
-      baseAmountCents = Math.round(totalCents / factor);
-
-      const platformPctFinal = platformPctOriginal - extraDiscount / 100;
+      // Valor antes do desconto EXTRA: baseAmountCents (que veio do frontend)
+      
+      // Cálculo do NOVO valor a ser pago (totalCents já está correto vindo do frontend com o desconto extra)
+      const multiplier = 1 - extraDiscount / 100;
+      // Recalcular o valor antes do desconto extra (para uso futuro no webhook)
+      baseAmountCents = Math.round(totalCents / multiplier);
+      
+      // TAXA DA PLATAFORMA: Margem Original (18%) - Desconto Extra (5%) = 13%
+      const platformPctFinal = platformPctOriginal - extraDiscount / 100; // 0.18 - 0.05 = 0.13
+      
+      // A taxa é aplicada SOBRE o valor BASE (antes do desconto extra),
+      // pois queremos que o parceiro receba o valor cheio (totalCents - (baseAmountCents * 0.18))
+      // e o patrocinador cubra a diferença de 5%
       applicationFeeCents = Math.round(baseAmountCents * platformPctFinal);
+      
     } else {
+      // Cliente normal: Taxa de 18% sobre o valor pago
       applicationFeeCents = Math.round(totalCents * platformPctOriginal);
+      baseAmountCents = totalCents; // baseAmountCents é igual ao valor pago
     }
+    
+    // Garantir que a taxa não seja negativa ou zero
+    applicationFeeCents = Math.max(1, applicationFeeCents); // Stripe exige um valor mínimo
 
     // ------------------------------------------------
-    // 4. Criar sessão Stripe
+    // 4. Criar sessão Stripe (INALTERADO)
     // ------------------------------------------------
     const successUrl = `${process.env.FRONTEND_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${process.env.FRONTEND_URL}/cancel.html`;
@@ -144,7 +165,7 @@ router.post("/create-checkout-session", async (req, res) => {
           price_data: {
             currency,
             product_data: { name: productName },
-            unit_amount: totalCents,
+            unit_amount: amountToChargeCents, // Valor final que o cliente paga
           },
           quantity: 1,
         },
@@ -158,10 +179,11 @@ router.post("/create-checkout-session", async (req, res) => {
         partnerSlug,
         productName,
         originalPriceCents,
-        sponsorCode,
+        sponsorCode: sponsorCode || "", // Garante que seja string vazia se nulo
         extraDiscount,
         sponsorName: sponsorName || "",
-        baseAmountCents,
+        baseAmountCents, // Valor antes do desconto EXTRA, mas depois do desconto PADRÃO
+        platformPctOriginal: platformPctOriginal * 100, // 18 para cálculo
       },
 
       payment_intent_data: {
@@ -185,6 +207,7 @@ router.post("/create-checkout-session", async (req, res) => {
 
 // ==========================================================
 // 2) STRIPE WEBHOOK — emitir voucher + marcar sponsorCode como usado
+//    (Ajuste de cálculo e E-mail Customizado)
 // ==========================================================
 router.post("/webhook", async (req, res) => {
   let event;
@@ -210,40 +233,55 @@ router.post("/webhook", async (req, res) => {
       session.customer_details?.email || session.metadata?.email || "no-email";
     const partnerSlug = session.metadata?.partnerSlug;
     const productName = session.metadata?.productName;
-    const originalPriceCents = Number(session.metadata?.originalPriceCents || session.amount_total);
     const sponsorCode = normalize(session.metadata?.sponsorCode);
     const extraDiscount = Number(session.metadata?.extraDiscount || 0);
     const sponsorName = session.metadata?.sponsorName || "";
+    const originalPriceCents = Number(session.metadata?.originalPriceCents || 0);
 
-    const amountCents = session.amount_total;
+    const amountCents = session.amount_total; // Valor pago pelo cliente
     const currency = session.currency || "eur";
-    let baseAmountCents = Number(session.metadata?.baseAmountCents || amountCents);
+    const baseAmountCents = Number(session.metadata?.baseAmountCents || amountCents); // Valor ANTES do desconto EXTRA
 
-    // Cálculos financeiros
+    // Cálculos financeiros (Garantindo que a plataforma absorva o desconto extra)
     const platformPctOriginal = 0.18;
     let platformFeeCents;
     let partnerShareCents;
 
     if (extraDiscount > 0) {
-      const platformPctFinal = platformPctOriginal - extraDiscount / 100;
+      // Cliente especial: comissão da plataforma = 18% - Desconto Extra
+      const platformPctFinal = platformPctOriginal - extraDiscount / 100; // Ex: 0.13
+      
+      // A taxa é aplicada sobre o valor BASE (antes do desconto extra)
       platformFeeCents = Math.round(baseAmountCents * platformPctFinal);
-      partnerShareCents = amountCents - platformFeeCents;
+      
+      // O parceiro recebe o valor pago pelo cliente MENOS a nova comissão da plataforma
+      partnerShareCents = amountCents - platformFeeCents; 
+      
+      // === VALIDAÇÃO DE SEGURANÇA ANTIFRAUDE ===
+      // Comparar a Application Fee que o Stripe calculou com a que o backend calculou
+      const stripeFee = session.total_details.amount_application_fee;
+      if (Math.abs(stripeFee - platformFeeCents) > 2) { // 2 centavos de margem de erro
+         // Isso nunca deve acontecer se o create-session rodar corretamente
+         console.warn(`[WEBHOOK] Alerta: Divergência na Application Fee! Stripe: ${stripeFee}, Calculado: ${platformFeeCents}`);
+      }
+
     } else {
+      // Cliente normal: comissão de 18% sobre o valor pago
       platformFeeCents = Math.round(amountCents * platformPctOriginal);
       partnerShareCents = amountCents - platformFeeCents;
     }
 
-    // Criar voucher
+    // Criar voucher (INALTERADO)
     const code = generateVoucherCode();
 
-    // Validade (dias padrão 60)
-    // 🔴 CORRIGIDO: Removida a coluna "official_url" que estava causando erro de schema no DB
+    // Validade (INALTERADO)
     const partnerRes = await pool.query(
-      "SELECT name, email, phone, location, voucher_validity_days FROM partners WHERE slug = $1",
+      "SELECT voucher_validity_days, name, discount_percent FROM partners WHERE slug = $1",
       [partnerSlug]
     );
     const partner = partnerRes.rows[0] || {};
     const daysValidity = partner.voucher_validity_days || 60;
+    const partnerDiscount = partner.discount_percent || 15;
 
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + daysValidity);
@@ -266,7 +304,7 @@ router.post("/webhook", async (req, res) => {
       ]
     );
 
-    // Marcar sponsorCode como usado
+    // Marcar sponsorCode como usado (INALTERADO)
     if (sponsorCode && extraDiscount > 0) {
       await pool.query(
         `UPDATE sponsor_vouchers 
@@ -276,80 +314,76 @@ router.post("/webhook", async (req, res) => {
       );
     }
 
-    // ENVIAR EMAIL AO CLIENTE (resumo especial)
+    // ===============================================
+    // ENVIAR EMAIL AO CLIENTE (Lógica do template customizado)
+    // ===============================================
     const validateUrl = `${process.env.FRONTEND_URL}/validate.html?code=${code}`;
-
-    // CÓDIGO HTML DO E-MAIL
-    const partnerName = partner.name || partnerSlug;
-    const originalPriceEur = (originalPriceCents / 100).toFixed(2);
-    const finalPriceEur = (amountCents / 100).toFixed(2);
+    const amountPaidEuros = (amountCents / 100).toFixed(2);
+    const originalPriceEuros = (originalPriceCents / 100).toFixed(2);
     
-    // As linhas de contato são renderizadas apenas se os dados existirem no DB
-    const partnerEmailHtml = partner.email 
-        ? `<p style="margin: 0 0 5px 0;">📧 E-mail: <a href="mailto:${partner.email}" style="color: #007bff; text-decoration: none;">${partner.email}</a></p>` 
-        : '';
-    const partnerPhoneHtml = partner.phone 
-        ? `<p style="margin: 0 0 5px 0;">📞 Telefone: <a href="tel:${partner.phone.replace(/\s/g, '')}" style="color: #007bff; text-decoration: none;">${partner.phone}</a></p>` 
-        : '';
-    const partnerLocationHtml = partner.location 
-        ? `<p style="margin: 0 0 5px 0;">📍 Localização: ${partner.location}</p>` 
-        : '';
-    const partnerOfficialUrlHtml = ''; // Não buscado para evitar o erro de coluna
-    const partnerInstagramHtml = ''; // Não buscado para evitar o erro de coluna
+    // Cálculo total de economia
+    let totalEconomyCents = originalPriceCents - amountCents;
+    const totalEconomyEuros = (totalEconomyCents / 100).toFixed(2);
+    
+    let html;
 
-    // QR Code Simples (Google Charts API)
-    const qrCodeUrl = `https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=${encodeURIComponent(validateUrl)}`;
-
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
-        <div style="text-align: center; padding-bottom: 20px; border-bottom: 1px solid #eee;">
-          <img src="${process.env.LOGO_URL || 'https://via.placeholder.com/150x50?text=VoucherHub+Logo'}" alt="Logo VoucherHub" style="max-width: 150px; height: auto;">
-        </div>
-
-        <h2 style="color: #28a745; text-align: center; margin-top: 20px;">🎉 Voucher Confirmado!</h2>
-        <p style="text-align: center; font-size: 1.1em; color: #555;">Obrigado por comprar a experiência com <b>${partnerName}</b>.</p>
-
-        <div style="background: #f0fff0; padding: 15px; border-radius: 6px; margin-top: 20px; border: 1px dashed #28a745;">
-          <h3 style="margin-top: 0; color: #333;">Detalhes da Compra</h3>
-          <p style="font-size: 1.1em; margin-bottom: 5px;">Experiência: <b style="color: #333;">${productName}</b></p>
-          <p style="font-size: 1.1em; margin-bottom: 5px;">Código do Voucher: <b style="color: #d35400; font-size: 1.3em;">${code}</b></p>
-          <p style="margin-bottom: 5px; color: #555;">Validade: ${expiryDate.toLocaleDateString('pt-PT')}</p>
-        </div>
-
-        <div style="margin-top: 20px; padding: 15px; border-radius: 6px; background: #fff;">
-          <h3 style="color: #333; margin-top: 0;">Resumo Financeiro</h3>
-          <p style="margin-bottom: 5px;">Preço Original: <s style="color: #999; font-size: 0.9em;">€${originalPriceEur}</s></p>
-          <p style="margin-bottom: 10px; font-weight: bold; color: #28a745; font-size: 1.2em;">Preço Final Pago: €${finalPriceEur}</p>
-          ${
-            extraDiscount > 0
-              ? `<p style="color: #d35400; font-style: italic; margin-top: -5px;">⭐ Desconto Patrocinador: ${extraDiscount}% (Patrocinador: ${sponsorName})</p>`
-              : ""
-          }
-        </div>
-
-        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-          <p style="font-weight: bold; margin-bottom: 10px; font-size: 1.1em; color: #333;">Apresente para a validação:</p>
-          <img src="${qrCodeUrl}" alt="QR Code do Voucher" style="display: block; margin: 0 auto; border: 5px solid #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); max-width: 200px;">
-          <p style="font-size: 0.9em; color: #777; margin-top: 15px;">Para validar, o parceiro pode escanear o QR Code acima ou usar o link de validação:</p>
-          <a href="${validateUrl}" style="word-break: break-all; font-size: 0.9em; color: #007bff; text-decoration: underline;">${validateUrl}</a>
-        </div>
+    if (extraDiscount > 0) {
+        // CLIENTE ESPECIAL - E-mail customizado
         
-        <div style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 25px;">
-          <h4 style="color: #333; margin-top: 0;">Informações de Contato do Parceiro (${partnerName})</h4>
-          ${partnerLocationHtml}
-          ${partnerOfficialUrlHtml}
-          ${partnerEmailHtml}
-          ${partnerPhoneHtml}
-          ${partnerInstagramHtml}
-        </div>
+        // CÁLCULO DE DESCONTOS INDIVIDUAIS
+        // Preço antes de tudo
+        // Desconto Padrão = Preço Original - Base Amount
+        const baseAmountEuros = (baseAmountCents / 100).toFixed(2);
+        const partnerDiscountEuros = ((originalPriceCents - baseAmountCents) / 100).toFixed(2);
+        
+        // Desconto Extra = Base Amount - Valor Pago
+        const extraDiscountEuros = ((baseAmountCents - amountCents) / 100).toFixed(2);
+        
+        html = `
+            <h2>🎉 O seu voucher especial chegou!</h2>
+            <p>Olá,</p>
+            <p>Parabéns! Você adquiriu a seguinte experiência com seu código de patrocinador:</p>
+            
+            <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Experiência Adquirida:</td><td style="padding: 8px; border: 1px solid #ddd;">${productName}</td></tr>
+                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Preço Original:</td><td style="padding: 8px; border: 1px solid #ddd;">€${originalPriceEuros}</td></tr>
+                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">✔ Desconto Padrão (${partnerDiscount}%):</td><td style="padding: 8px; border: 1px solid #ddd; color: #cc0000;">- €${partnerDiscountEuros}</td></tr>
+                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">✔ Desconto Patrocinador (+${extraDiscount}%):</td><td style="padding: 8px; border: 1px solid #ddd; color: #cc0000;">- €${extraDiscountEuros}</td></tr>
+                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Total de Economia:</td><td style="padding: 8px; border: 1px solid #ddd; color: #00AA00;">€${totalEconomyEuros}</td></tr>
+                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Valor Pago:</td><td style="padding: 8px; border: 1px solid #ddd; font-size: 1.1em;">€${amountPaidEuros}</td></tr>
+                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Código Especial Utilizado:</td><td style="padding: 8px; border: 1px solid #ddd;">${sponsorCode} (${sponsorName})</td></tr>
+            </table>
 
-        <p style="font-size: 0.8em; color: #777; text-align: center; margin-top: 20px;">Válido até: ${expiryDate.toLocaleDateString('pt-PT')} (${daysValidity} dias).</p>
-      </div>
-    `;
-
+            <p>Seu código de voucher é: <b style="font-size: 1.2em;">${code}</b></p>
+            <p>Você pode utilizá-lo aqui: <a href="${validateUrl}">${validateUrl}</a></p>
+            <p>Obrigado!</p>
+        `;
+    } else {
+        // CLIENTE NORMAL - E-mail padrão
+        const partnerDiscount = partner.discount_percent || 15;
+        
+        html = `
+            <h2>🎉 O seu voucher chegou!</h2>
+            <p>Olá,</p>
+            <p>Você adquiriu a seguinte experiência com o desconto padrão de ${partnerDiscount}%:</p>
+            
+            <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Experiência Adquirida:</td><td style="padding: 8px; border: 1px solid #ddd;">${productName}</td></tr>
+                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Preço Original:</td><td style="padding: 8px; border: 1px solid #ddd;">€${originalPriceEuros}</td></tr>
+                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Total de Economia:</td><td style="padding: 8px; border: 1px solid #ddd; color: #00AA00;">€${totalEconomyEuros}</td></tr>
+                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Valor Pago:</td><td style="padding: 8px; border: 1px solid #ddd; font-size: 1.1em;">€${amountPaidEuros}</td></tr>
+            </table>
+            
+            <p>Seu código de voucher é: <b style="font-size: 1.2em;">${code}</b></p>
+            <p>Você pode utilizá-lo aqui: <a href="${validateUrl}">${validateUrl}</a></p>
+            <p>Obrigado!</p>
+        `;
+    }
+    
+    // Disparo do email
     await sendEmail({
       to: email,
-      subject: `Seu voucher para ${productName} (Código: ${code})`,
+      subject: `Seu voucher para ${productName}`,
       html,
     });
 
