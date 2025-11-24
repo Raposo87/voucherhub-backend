@@ -237,9 +237,9 @@ router.post("/webhook", async (req, res) => {
     const code = generateVoucherCode();
 
     // Validade (dias padrão 60)
-    // 🔴 CORRIGIDO: Removida a coluna "instagram" que estava causando erro de schema no DB
+    // 🔴 CORRIGIDO: Removida a coluna "official_url" que estava causando erro de schema no DB
     const partnerRes = await pool.query(
-      "SELECT name, email, phone, official_url, location, voucher_validity_days FROM partners WHERE slug = $1",
+      "SELECT name, email, phone, location, voucher_validity_days FROM partners WHERE slug = $1",
       [partnerSlug]
     );
     const partner = partnerRes.rows[0] || {};
@@ -279,12 +279,12 @@ router.post("/webhook", async (req, res) => {
     // ENVIAR EMAIL AO CLIENTE (resumo especial)
     const validateUrl = `${process.env.FRONTEND_URL}/validate.html?code=${code}`;
 
-    // ✅ CÓDIGO HTML DO E-MAIL (Com todas as infos e o QR Code simples)
+    // CÓDIGO HTML DO E-MAIL
     const partnerName = partner.name || partnerSlug;
     const originalPriceEur = (originalPriceCents / 100).toFixed(2);
     const finalPriceEur = (amountCents / 100).toFixed(2);
     
-    // O partner.instagram é deixado fora aqui já que a coluna não existe no DB
+    // As linhas de contato são renderizadas apenas se os dados existirem no DB
     const partnerEmailHtml = partner.email 
         ? `<p style="margin: 0 0 5px 0;">📧 E-mail: <a href="mailto:${partner.email}" style="color: #007bff; text-decoration: none;">${partner.email}</a></p>` 
         : '';
@@ -294,13 +294,8 @@ router.post("/webhook", async (req, res) => {
     const partnerLocationHtml = partner.location 
         ? `<p style="margin: 0 0 5px 0;">📍 Localização: ${partner.location}</p>` 
         : '';
-    const partnerOfficialUrlHtml = partner.official_url 
-        ? `<p style="margin: 0 0 5px 0;">🔗 Site Oficial: <a href="${partner.official_url}" target="_blank" style="color: #007bff; text-decoration: none;">${partner.official_url}</a></p>` 
-        : '';
-    // Como a coluna 'instagram' não existe, esta linha será um string vazio.
-    const partnerInstagramHtml = partner.instagram 
-        ? `<p style="margin: 0 0 5px 0;">📸 Instagram: <a href="${partner.instagram}" target="_blank" style="color: #007bff; text-decoration: none;">${partner.instagram}</a></p>` 
-        : '';
+    const partnerOfficialUrlHtml = ''; // Não buscado para evitar o erro de coluna
+    const partnerInstagramHtml = ''; // Não buscado para evitar o erro de coluna
 
     // QR Code Simples (Google Charts API)
     const qrCodeUrl = `https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=${encodeURIComponent(validateUrl)}`;
