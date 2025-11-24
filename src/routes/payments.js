@@ -28,7 +28,7 @@ function formatDatePT(date) {
 }
 
 // ==========================================================
-// 1) CREATE CHECKOUT SESSION
+// 1) CREATE CHECKOUT SESSION (AGORA RETÉM OS FUNDOS)
 // ==========================================================
 router.post("/create-checkout-session", async (req, res) => {
   const client = await pool.connect();
@@ -128,7 +128,7 @@ router.post("/create-checkout-session", async (req, res) => {
     
     applicationFeeCents = Math.max(1, applicationFeeCents);
     
-    // 🔴 NOVO: Calcular a percentagem total de desconto e criar nome descritivo
+    // 🟢 NOVO: Calcular a percentagem total de desconto e criar nome descritivo para o Stripe Checkout
     const originalPriceCentsNum = Number(originalPriceCents);
     const totalDiscountCents = originalPriceCentsNum - finalAmountToChargeCents;
     const totalDiscountPct = originalPriceCentsNum > 0
@@ -137,7 +137,9 @@ router.post("/create-checkout-session", async (req, res) => {
 
     const originalPriceEuros = (originalPriceCentsNum / 100).toFixed(2);
     
+    // Este nome aparecerá na linha de item do Stripe Checkout, mostrando a quebra de valor.
     const descriptiveProductName = `[Voucher - ${productName}] Preço Original: €${originalPriceEuros} | Total Desconto: ${totalDiscountPct}%`;
+
 
     // 4. Criar sessão Stripe
     const successUrl = `${process.env.FRONTEND_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`;
@@ -151,7 +153,9 @@ router.post("/create-checkout-session", async (req, res) => {
         {
           price_data: {
             currency,
-            product_data: { name: productName },
+            product_data: { 
+                name: descriptiveProductName, // 🔴 USANDO O NOVO NOME DESCRITIVO
+            },
             unit_amount: finalAmountToChargeCents,
           },
           quantity: 1,
@@ -172,9 +176,10 @@ router.post("/create-checkout-session", async (req, res) => {
       },
       payment_intent_data: {
         application_fee_amount: applicationFeeCents,
-        transfer_data: {
-          destination: partner.stripe_account_id,
-        },
+        // ❌ REMOVIDO: transfer_data é removido para que o dinheiro fique na conta da plataforma
+        // transfer_data: {
+        //   destination: partner.stripe_account_id,
+        // },
       },
     });
 
@@ -190,7 +195,7 @@ router.post("/create-checkout-session", async (req, res) => {
 });
 
 // ==========================================================
-// 2) STRIPE WEBHOOK
+// 2) STRIPE WEBHOOK (AGORA ARMAZENA O Payment Intent ID)
 // ==========================================================
 router.post("/webhook", async (req, res) => {
   let event;
@@ -223,6 +228,9 @@ router.post("/webhook", async (req, res) => {
     const baseAmountCents = Number(session.metadata?.baseAmountCents || session.amount_total);
     const amountCents = session.amount_total;
     const currency = session.currency || "eur";
+    
+    // 🟢 NOVO: Obtém o ID da transação
+    const paymentIntentId = session.payment_intent; 
 
     // Cálculos para comissão
     const platformPctOriginal = 0.18;
@@ -256,8 +264,8 @@ router.post("/webhook", async (req, res) => {
     await pool.query(
       `INSERT INTO vouchers (
         email, partner_slug, code, amount_cents, currency, 
-        stripe_session_id, expires_at, platform_fee_cents, partner_share_cents
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        stripe_session_id, stripe_payment_intent_id, expires_at, platform_fee_cents, partner_share_cents
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, // 🔴 NOVO: Adicionado um placeholder ($7) para o Payment Intent ID
       [
         email,
         partnerSlug,
@@ -265,6 +273,7 @@ router.post("/webhook", async (req, res) => {
         amountCents,
         currency,
         session.id,
+        paymentIntentId, // 🔴 Armazenando o Payment Intent ID
         expiryDate.toISOString(),
         platformFeeCents,
         partnerShareCents,
@@ -282,7 +291,7 @@ router.post("/webhook", async (req, res) => {
     }
 
     // ------------------------------------------------------------
-    // ENVIAR EMAIL COM QR CODE E INFORMAÇÕES COMPLETAS
+    // ENVIAR EMAIL COM QR CODE E INFORMAÇÕES COMPLETAS (O CÓDIGO HTML FOI MANTIDO COMO ESTAVA NO SEU UPLOAD)
     // ------------------------------------------------------------
     const validateUrl = `${process.env.FRONTEND_URL}/validate.html?code=${code}`;
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(validateUrl)}`;
@@ -321,7 +330,9 @@ router.post("/webhook", async (req, res) => {
             <div style="display: inline-block; padding: 15px; background: #ffffff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                 <img src="${qrCodeUrl}" alt="QR Code" style="width: 200px; height: 200px; display: block;">
             </div>
-            <p style="margin: 10px 0 0 0; font-size: 15px; font-weight: 600; color: #666;">Apresente este QR Code ao parceiro para validação.</p>
+            <p style="margin: 15px 0 5px 0; font-size: 14px; color: #666; font-weight: 500;">SEU CÓDIGO VOUCHER</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: #667eea; letter-spacing: 2px;">${code}</p>
+            <p style="margin: 10px 0 0 0; font-size: 13px; color: #888;">Apresente este código ao parceiro</p>
         </div>
 
         <div style="padding: 0 30px 20px 30px;">
@@ -420,7 +431,9 @@ router.post("/webhook", async (req, res) => {
             <div style="display: inline-block; padding: 15px; background: #ffffff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                 <img src="${qrCodeUrl}" alt="QR Code" style="width: 200px; height: 200px; display: block;">
             </div>
-            <p style="margin: 10px 0 0 0; font-size: 15px; font-weight: 600; color: #666;">Apresente este QR Code ao parceiro para validação.</p>
+            <p style="margin: 15px 0 5px 0; font-size: 14px; color: #666; font-weight: 500;">SEU CÓDIGO VOUCHER</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: #667eea; letter-spacing: 2px;">${code}</p>
+            <p style="margin: 10px 0 0 0; font-size: 13px; color: #888;">Apresente este código ao parceiro</p>
         </div>
 
         <div style="padding: 0 30px 20px 30px;">

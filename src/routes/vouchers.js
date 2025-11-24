@@ -1,107 +1,112 @@
-import express from 'express';
-import { pool } from '../db.js';
+import { Router } from "express";
+import Stripe from "stripe";
+import { pool } from "../db.js";
 
-const router = express.Router();
-/**
- * GET /api/vouchers/validate/:code
- * Retorna informações sobre o voucher e seu status
- */
-router.get("/validate/:code", async (req, res) => {
-  try {
-    const { code } = req.params;
-    const { rows } = await pool.query("SELECT * FROM vouchers WHERE code = $1", [code]);
-
-    if (!rows.length) {
-      return res.status(404).json({ valid: false, message: "Voucher não encontrado." });
-    }
-
-    const voucher = rows[0];
-    const now = new Date();
-
-    // Verifica status
-    if (voucher.status === "used") {
-      return res.json({ valid: false, status: "used", message: "Voucher já foi utilizado.", voucher });
-    }
-
-    if (voucher.expires_at && new Date(voucher.expires_at) < now) {
-      return res.json({ valid: false, status: "expired", message: "Voucher expirado.", voucher });
-    }
-
-    // Voucher ativo
-    return res.json({
-      valid: true,
-      status: voucher.status,
-      message: "Voucher válido.",
-      voucher: {
-        code: voucher.code,
-        partner_slug: voucher.partner_slug,
-        email: voucher.email,
-        amount_cents: voucher.amount_cents,
-        currency: voucher.currency,
-        created_at: voucher.created_at,
-        expires_at: voucher.expires_at
-      }
-    });
-  } catch (err) {
-    console.error("Erro ao validar voucher:", err);
-    res.status(500).json({ valid: false, message: "Erro interno do servidor." });
-  }
+const router = Router();
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2024-06-20",
 });
 
-/**
- * POST /api/vouchers/use/:code
- * Marca o voucher como "used", exigindo um PIN de parceiro
- */
-router.post("/use/:code", async (req, res) => {
+// ==========================================================
+// ROTA DE VALIDAÇÃO DO VOUCHER E TRANSFERÊNCIA DE FUNDOS
+// POST /api/vouchers/validate
+// ==========================================================
+router.post("/validate", async (req, res) => {
+  const { code } = req.body; // O 'code' é o que é lido pelo QR Code
+
+  if (!code) {
+    return res.status(400).json({ error: "Código do voucher é obrigatório." });
+  }
+
+  const client = await pool.connect();
+
   try {
-    const { code } = req.params;
-    const { pin } = req.body;
+    await client.query("BEGIN");
 
-    if (!pin) {
-      return res.status(400).json({ error: "PIN é obrigatório." });
-    }
-
-    // 1) Buscar o voucher
-    const result = await pool.query("SELECT * FROM vouchers WHERE code = $1", [code]);
-    if (!result.rows.length) {
-      return res.status(404).json({ error: "Voucher não encontrado." });
-    }
-    const voucher = result.rows[0];
-
-    // 2) Buscar o PIN do parceiro na tabela partners
-    const partnerRes = await pool.query(
-      "SELECT pin FROM partners WHERE slug = $1",
-      [voucher.partner_slug]
-    );
-
-    if (!partnerRes.rows.length) {
-      return res.status(403).json({ error: "Parceiro não encontrado ou não autorizado." });
-    }
-
-    const expectedPin = partnerRes.rows[0].pin;
-
-    // 3) Validar PIN
-    if (pin !== expectedPin) {
-      return res.status(403).json({ error: "PIN incorreto." });
-    }
-
-    // 4) Se já usado → bloqueia
-    if (voucher.status === "used") {
-      return res.status(400).json({ error: "Este voucher já foi utilizado." });
-    }
-
-    // 5) Atualizar status
-    await pool.query(
-      "UPDATE vouchers SET status = 'used', used_at = NOW() WHERE code = $1",
+    // 1. Buscar o voucher, incluindo o Payment Intent ID e o stripe_account_id do parceiro
+    const voucherRes = await client.query(
+      `SELECT 
+        v.id, v.used, v.expires_at, v.stripe_payment_intent_id, 
+        v.partner_share_cents, v.partner_slug, p.stripe_account_id
+      FROM vouchers v
+      JOIN partners p ON v.partner_slug = p.slug
+      WHERE v.code = $1
+      FOR UPDATE`, // Garante que mais ninguém modifique este voucher
       [code]
     );
 
-    console.log(`✅ Voucher ${code} marcado como usado (${voucher.partner_slug})`);
+    if (!voucherRes.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Voucher não encontrado." });
+    }
 
-    res.json({ success: true, message: "Voucher marcado como usado com sucesso." });
+    const voucher = voucherRes.rows[0];
+
+    // 2. Verificar o estado do voucher
+    if (voucher.used) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Voucher já utilizado." });
+    }
+
+    if (new Date() > new Date(voucher.expires_at)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Voucher expirado." });
+    }
+
+    // 3. Realizar a Transferência Stripe (Isto é a sua transferência automática)
+    const transferAmount = voucher.partner_share_cents;
+    const destinationAccountId = voucher.stripe_account_id;
+
+    if (transferAmount > 0 && destinationAccountId) {
+      try {
+        await stripe.transfers.create({
+          amount: transferAmount,
+          currency: 'eur',
+          destination: destinationAccountId,
+          source_transaction: voucher.stripe_payment_intent_id, // O ID da transação original (Payment Intent ID)
+          metadata: {
+            voucher_code: code,
+            partner_slug: voucher.partner_slug,
+            voucher_id: voucher.id,
+          },
+        });
+        console.log(`✅ Transferência de €${(transferAmount / 100).toFixed(2)} para ${voucher.partner_slug} (ID: ${voucher.id}) efetuada com sucesso.`);
+
+      } catch (stripeError) {
+        // Se a transferência falhar, o voucher NÃO é marcado como usado
+        await client.query("ROLLBACK");
+        console.error("❌ ERRO STRIPE TRANSFERÊNCIA:", stripeError.message);
+        return res.status(500).json({ 
+            error: "Erro na transferência Stripe. O voucher não foi utilizado.",
+            details: stripeError.message 
+        });
+      }
+    } else if (transferAmount <= 0) {
+        // Se o valor for 0 (ex: voucher de oferta), apenas prossegue para marcar como usado
+        console.log(`⚠️ Voucher ID ${voucher.id} validado, mas sem valor de transferência.`);
+    }
+
+
+    // 4. Marcar o voucher como utilizado na base de dados
+    await client.query(
+      "UPDATE vouchers SET used = TRUE, used_at = NOW() WHERE id = $1",
+      [voucher.id]
+    );
+
+    await client.query("COMMIT");
+    
+    return res.status(200).json({ 
+        success: true,
+        message: "Voucher validado e marcado como utilizado. Transferência para o parceiro iniciada.",
+        code: code 
+    });
+
   } catch (err) {
-    console.error("Erro ao marcar voucher como usado:", err);
-    res.status(500).json({ error: "Erro interno do servidor." });
+    await client.query("ROLLBACK");
+    console.error("❌ ERRO VALIDAÇÃO VOUCHER:", err);
+    return res.status(500).json({ error: "Erro interno do servidor ao validar o voucher." });
+  } finally {
+    client.release();
   }
 });
 
