@@ -232,7 +232,7 @@ router.post("/webhook", async (req, res) => {
 
     // Buscar informações do parceiro
     const partnerRes = await pool.query(
-      "SELECT voucher_validity_days, name, address, phone, email FROM partners WHERE slug = $1",
+      "SELECT voucher_validity_days, name, location, phone, email FROM partners WHERE slug = $1",
       [partnerSlug]
     );
     const partner = partnerRes.rows[0] || {};
@@ -301,13 +301,11 @@ router.post("/webhook", async (req, res) => {
 <body style="margin: 0; padding: 20px; background-color: #f5f5f5; font-family: 'Helvetica Neue', Arial, sans-serif;">
     <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
         
-        <!-- Header -->
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; padding: 40px 20px; text-align: center;">
             <h1 style="margin: 0; font-size: 28px; font-weight: 600;">🎉 Voucher Exclusivo!</h1>
             <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Condições especiais de patrocinador</p>
         </div>
 
-        <!-- QR Code Section -->
         <div style="text-align: center; padding: 30px 20px; background: linear-gradient(to bottom, #f8f9ff 0%, #ffffff 100%);">
             <div style="display: inline-block; padding: 15px; background: #ffffff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                 <img src="${qrCodeUrl}" alt="QR Code" style="width: 200px; height: 200px; display: block;">
@@ -317,7 +315,6 @@ router.post("/webhook", async (req, res) => {
             <p style="margin: 10px 0 0 0; font-size: 13px; color: #888;">Apresente este código ao parceiro</p>
         </div>
 
-        <!-- Product Info -->
         <div style="padding: 0 30px 20px 30px;">
             <div style="background: #f8f9ff; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea;">
                 <h3 style="margin: 0 0 5px 0; font-size: 18px; color: #333;">📦 ${productName}</h3>
@@ -325,7 +322,6 @@ router.post("/webhook", async (req, res) => {
             </div>
         </div>
 
-        <!-- Price Breakdown -->
         <div style="padding: 0 30px 30px 30px;">
             <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333; font-weight: 600;">💰 Resumo Financeiro</h3>
             
@@ -355,7 +351,6 @@ router.post("/webhook", async (req, res) => {
             </div>
         </div>
 
-        <!-- Validity -->
         <div style="padding: 0 30px 30px 30px;">
             <div style="background: #fff8e1; border-left: 4px solid #ffa726; padding: 15px; border-radius: 6px;">
                 <p style="margin: 0 0 8px 0; font-size: 14px; color: #e65100; font-weight: 600;">⏰ Validade do Voucher</p>
@@ -364,18 +359,16 @@ router.post("/webhook", async (req, res) => {
             </div>
         </div>
 
-        <!-- Partner Info -->
         <div style="padding: 0 30px 30px 30px;">
             <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333; font-weight: 600;">📍 Informações do Parceiro</h3>
             <div style="background: #f8f9ff; padding: 20px; border-radius: 8px;">
                 <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #667eea;">${partner.name || 'Parceiro'}</p>
-                ${partner.address ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📍 Endereço:</strong> ${partner.address}</p>` : ''}
+                ${partner.location ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📍 Localização:</strong> ${partner.location}</p>` : ''} 
                 ${partner.phone ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📞 Telefone:</strong> ${partner.phone}</p>` : ''}
                 ${partner.email ? `<p style="margin: 0; font-size: 14px; color: #666;"><strong>✉️ E-mail:</strong> ${partner.email}</p>` : ''}
             </div>
         </div>
 
-        <!-- Refund Policy -->
         <div style="padding: 0 30px 30px 30px;">
             <div style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; border-radius: 6px;">
                 <p style="margin: 0; font-size: 13px; color: #1565c0;">
@@ -384,7 +377,6 @@ router.post("/webhook", async (req, res) => {
             </div>
         </div>
 
-        <!-- Footer -->
         <div style="background: #f5f5f5; padding: 25px 30px; text-align: center; border-top: 1px solid #eee;">
             <p style="margin: 0 0 10px 0; font-size: 13px; color: #666;">
                 <a href="${validateUrl}" style="color: #667eea; text-decoration: none; font-weight: 500;">🔗 Link de validação manual</a>
@@ -410,13 +402,11 @@ router.post("/webhook", async (req, res) => {
 <body style="margin: 0; padding: 20px; background-color: #f5f5f5; font-family: 'Helvetica Neue', Arial, sans-serif;">
     <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
         
-        <!-- Header -->
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; padding: 40px 20px; text-align: center;">
             <h1 style="margin: 0; font-size: 28px; font-weight: 600;">🎉 Seu Voucher Chegou!</h1>
             <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Aproveite sua experiência</p>
         </div>
 
-        <!-- QR Code Section -->
         <div style="text-align: center; padding: 30px 20px; background: linear-gradient(to bottom, #f8f9ff 0%, #ffffff 100%);">
             <div style="display: inline-block; padding: 15px; background: #ffffff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                 <img src="${qrCodeUrl}" alt="QR Code" style="width: 200px; height: 200px; display: block;">
@@ -426,7 +416,6 @@ router.post("/webhook", async (req, res) => {
             <p style="margin: 10px 0 0 0; font-size: 13px; color: #888;">Apresente este código ao parceiro</p>
         </div>
 
-        <!-- Product Info -->
         <div style="padding: 0 30px 20px 30px;">
             <div style="background: #f8f9ff; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea;">
                 <h3 style="margin: 0 0 5px 0; font-size: 18px; color: #333;">📦 ${productName}</h3>
@@ -434,7 +423,6 @@ router.post("/webhook", async (req, res) => {
             </div>
         </div>
 
-        <!-- Price Breakdown -->
         <div style="padding: 0 30px 30px 30px;">
             <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333; font-weight: 600;">💰 Resumo Financeiro</h3>
             
@@ -460,7 +448,6 @@ router.post("/webhook", async (req, res) => {
             </div>
         </div>
 
-        <!-- Validity -->
         <div style="padding: 0 30px 30px 30px;">
             <div style="background: #fff8e1; border-left: 4px solid #ffa726; padding: 15px; border-radius: 6px;">
                 <p style="margin: 0 0 8px 0; font-size: 14px; color: #e65100; font-weight: 600;">⏰ Validade do Voucher</p>
@@ -469,18 +456,16 @@ router.post("/webhook", async (req, res) => {
             </div>
         </div>
 
-        <!-- Partner Info -->
         <div style="padding: 0 30px 30px 30px;">
             <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333; font-weight: 600;">📍 Informações do Parceiro</h3>
             <div style="background: #f8f9ff; padding: 20px; border-radius: 8px;">
                 <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #667eea;">${partner.name || 'Parceiro'}</p>
-                ${partner.address ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📍 Endereço:</strong> ${partner.address}</p>` : ''}
+                ${partner.location ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📍 Localização:</strong> ${partner.location}</p>` : ''}
                 ${partner.phone ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📞 Telefone:</strong> ${partner.phone}</p>` : ''}
                 ${partner.email ? `<p style="margin: 0; font-size: 14px; color: #666;"><strong>✉️ E-mail:</strong> ${partner.email}</p>` : ''}
             </div>
         </div>
 
-        <!-- Refund Policy -->
         <div style="padding: 0 30px 30px 30px;">
             <div style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; border-radius: 6px;">
                 <p style="margin: 0; font-size: 13px; color: #1565c0;">
@@ -489,7 +474,6 @@ router.post("/webhook", async (req, res) => {
             </div>
         </div>
 
-        <!-- Footer -->
         <div style="background: #f5f5f5; padding: 25px 30px; text-align: center; border-top: 1px solid #eee;">
             <p style="margin: 0 0 10px 0; font-size: 13px; color: #666;">
                 <a href="${validateUrl}" style="color: #667eea; text-decoration: none; font-weight: 500;">🔗 Link de validação manual</a>
