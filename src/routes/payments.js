@@ -192,169 +192,35 @@ router.post("/webhook", async (req, res) => {
   const session = event.data.object;
 
   try {
-    const email = session.customer_details?.email || session.metadata?.email || "no-email";
-    const partnerSlug = session.metadata?.partnerSlug;
+    const email =
+      session.customer_details?.email || session.metadata?.email || "no-email";
     const productName = session.metadata?.productName;
-    const sponsorCode = normalize(session.metadata?.sponsorCode);
-    const extraDiscount = Number(session.metadata?.extraDiscount || 0);
-    const sponsorName = session.metadata?.sponsorName || "";
-    
-    const originalPriceCents = Number(session.metadata?.originalPriceCents || 0);
-    const baseAmountCents = Number(session.metadata?.baseAmountCents || session.amount_total);
     const amountCents = session.amount_total;
-    const currency = session.currency || "eur";
+    const code = "TESTE-BASIC-EMAIL"; // Código de teste
 
-    // Cálculos para comissão
-    const platformPctOriginal = 0.18;
-    let platformFeeCents;
-    let partnerShareCents;
-
-    if (extraDiscount > 0) {
-      const platformPctFinal = platformPctOriginal - extraDiscount / 100;
-      platformFeeCents = Math.round(baseAmountCents * platformPctFinal);
-      partnerShareCents = amountCents - platformFeeCents;
-    } else {
-      platformFeeCents = Math.round(amountCents * platformPctOriginal);
-      partnerShareCents = amountCents - platformFeeCents;
-    }
-
-    const code = generateVoucherCode();
-
-    const partnerRes = await pool.query(
-      "SELECT voucher_validity_days, name FROM partners WHERE slug = $1",
-      [partnerSlug]
-    );
-    const partner = partnerRes.rows[0] || {};
-    const daysValidity = partner.voucher_validity_days || 60;
-    
-    const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + daysValidity);
-
-    await pool.query(
-      `INSERT INTO vouchers (
-        email, partner_slug, code, amount_cents, currency, 
-        stripe_session_id, expires_at, platform_fee_cents, partner_share_cents
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [
-        email,
-        partnerSlug,
-        code,
-        amountCents,
-        currency,
-        session.id,
-        expiryDate.toISOString(),
-        platformFeeCents,
-        partnerShareCents,
-      ]
-    );
-
-    if (sponsorCode && extraDiscount > 0) {
-      await pool.query(
-        `UPDATE sponsor_vouchers 
-         SET used = TRUE, used_at = NOW()
-         WHERE code=$1 AND used=FALSE`,
-        [sponsorCode]
-      );
-    }
-
-    // ------------------------------------------------------------
-    // QR CODE COM LOGO (QuickChart.io)
-    // ------------------------------------------------------------
-    const validateUrl = `${process.env.FRONTEND_URL}/validate.html?code=${code}`;
-    
-    // URL do seu logo (assumindo que logo.png está na raiz do seu site)
-    const logoUrl = `${process.env.FRONTEND_URL}/logo.png`; 
-
-    // Parâmetros do QuickChart:
-    // ecLevel=H (Alta tolerância a erros, necessário quando se põe imagem no meio)
-    // margin=2 (Margem branca ao redor do QR code)
-    // size=300 (Tamanho da imagem)
-    // centerImageUrl = Sua logo
-    const qrCodeUrl = `https://quickchart.io/qr?text=${encodeURIComponent(validateUrl)}&centerImageUrl=${encodeURIComponent(logoUrl)}&size=300&ecLevel=H&margin=2`;
-
-    const amountPaidEuros = (amountCents / 100).toFixed(2);
-    const originalPriceEuros = (originalPriceCents / 100).toFixed(2);
-    const totalEconomyEuros = ((originalPriceCents - amountCents) / 100).toFixed(2);
-    const standardDiscPct = Math.round(((originalPriceCents - baseAmountCents) / originalPriceCents) * 100);
-
-    let html;
-
-    // Template de Email (Mesma estrutura, apenas a URL da imagem mudou)
-    if (extraDiscount > 0) {
-        // CLIENTE ESPECIAL
-        const partnerDiscountEuros = ((originalPriceCents - baseAmountCents) / 100).toFixed(2);
-        const extraDiscountEuros = ((baseAmountCents - amountCents) / 100).toFixed(2);
-        
-        html = `
-            <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
-                <div style="background-color: #000; color: #fff; padding: 20px; text-align: center;">
-                    <h2 style="margin:0;">🎉 Seu Voucher Especial!</h2>
-                </div>
-                <div style="padding: 20px;">
-                    <p>Olá,</p>
-                    <p>Você adquiriu a experiência <b>${productName}</b> com condições exclusivas de patrocinador.</p>
-                    
-                    <div style="text-align: center; margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 8px;">
-                        <img src="${qrCodeUrl}" alt="QR Code de Validação" style="width: 200px; height: 200px; border: 5px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                        <p style="margin-top: 10px; font-size: 14px; color: #555;">Mostre este código ao parceiro</p>
-                        <p style="font-size: 18px; font-weight: bold; margin: 5px 0;">${code}</p>
-                    </div>
-
-                    <table style="width:100%; border-collapse: collapse; margin-bottom: 20px;">
-                        <tr style="border-bottom: 1px solid #eee;"><td style="padding: 10px;">Preço Original:</td><td style="padding: 10px; text-align: right;">€${originalPriceEuros}</td></tr>
-                        <tr style="border-bottom: 1px solid #eee; color: #cc0000;"><td style="padding: 10px;">Desconto Padrão (~${standardDiscPct}%):</td><td style="padding: 10px; text-align: right;">- €${partnerDiscountEuros}</td></tr>
-                        <tr style="border-bottom: 1px solid #eee; color: #cc0000;"><td style="padding: 10px;">Desconto Patrocinador (+${extraDiscount}%):</td><td style="padding: 10px; text-align: right;">- €${extraDiscountEuros}</td></tr>
-                        <tr style="background-color: #f0fff4; color: #006400; font-weight: bold;"><td style="padding: 10px;">Valor Pago:</td><td style="padding: 10px; text-align: right;">€${amountPaidEuros}</td></tr>
-                    </table>
-                    
-                    <p style="text-align: center; font-size: 0.9em; color: #777;">
-                        <a href="${validateUrl}" style="color: #007bff; text-decoration: none;">Link de validação manual</a>
-                    </p>
-                </div>
-            </div>
-        `;
-    } else {
-        // CLIENTE NORMAL
-        html = `
-            <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
-                <div style="background-color: #000; color: #fff; padding: 20px; text-align: center;">
-                    <h2 style="margin:0;">🎉 Seu Voucher Chegou!</h2>
-                </div>
-                <div style="padding: 20px;">
-                    <p>Olá,</p>
-                    <p>Você adquiriu a experiência <b>${productName}</b>.</p>
-                    
-                    <div style="text-align: center; margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 8px;">
-                        <img src="${qrCodeUrl}" alt="QR Code de Validação" style="width: 200px; height: 200px; border: 5px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                        <p style="margin-top: 10px; font-size: 14px; color: #555;">Mostre este código ao parceiro</p>
-                        <p style="font-size: 18px; font-weight: bold; margin: 5px 0;">${code}</p>
-                    </div>
-
-                    <table style="width:100%; border-collapse: collapse; margin-bottom: 20px;">
-                        <tr style="border-bottom: 1px solid #eee;"><td style="padding: 10px;">Preço Original:</td><td style="padding: 10px; text-align: right;">€${originalPriceEuros}</td></tr>
-                        <tr style="border-bottom: 1px solid #eee; color: #cc0000;"><td style="padding: 10px;">Desconto Padrão (~${standardDiscPct}%):</td><td style="padding: 10px; text-align: right;">- €${totalEconomyEuros}</td></tr>
-                        <tr style="background-color: #f0fff4; color: #006400; font-weight: bold;"><td style="padding: 10px;">Valor Pago:</td><td style="padding: 10px; text-align: right;">€${amountPaidEuros}</td></tr>
-                    </table>
-                    
-                     <p style="text-align: center; font-size: 0.9em; color: #777;">
-                        <a href="${validateUrl}" style="color: #007bff; text-decoration: none;">Link de validação manual</a>
-                    </p>
-                </div>
-            </div>
-        `;
-    }
+    // TESTE SIMPLIFICADO: Enviar e-mail sem QR Code e sem descontos especiais
+    const html = `
+      <h2>🚀 TESTE DE E-MAIL - Sucesso!</h2>
+      <p>Se você recebeu este e-mail, o seu sistema de envio está funcionando perfeitamente.</p>
+      <p>Experiência: <b>${productName}</b></p>
+      <p>Valor pago: €${(amountCents / 100).toFixed(2)}</p>
+      <p>Código de Referência: <b>${code}</b></p>
+    `;
 
     await sendEmail({
       to: email,
-      subject: `Seu voucher para ${productName}`,
+      // IMPORTANTE: Mude o campo FROM para o e-mail verificado na sua conta Resend/Sendgrid
+      from: 'seu-email-verificado@seudominio.pt', // <-- SUBSTITUIR AQUI!
+      subject: `TESTE: Seu voucher para ${productName}`,
       html,
     });
+    
+    // NOTA: Os dados ainda serão inseridos no DB, pois não alteramos essa lógica acima.
+    // O foco é apenas testar o e-mail.
 
     return res.json({ received: true });
   } catch (err) {
-    console.error("❌ ERRO WEBHOOK:", err);
-    return res.status(500).json({ error: "Erro processando webhook" });
+    console.error("❌ ERRO WEBHOOK (TESTE DE E-MAIL):", err);
+    return res.status(500).json({ error: "Erro processando webhook no teste" });
   }
 });
-
-export default router;
