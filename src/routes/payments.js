@@ -140,6 +140,8 @@ router.post("/create-checkout-session", async (req, res) => {
     // Este nome aparecerá na linha de item do Stripe Checkout, mostrando a quebra de valor.
     const descriptiveProductName = `[Voucher - ${productName}] Preço Original: €${originalPriceEuros} | Total Desconto: ${totalDiscountPct}%`;
 
+    const finalApplicationFee = parseInt(applicationFeeCents, 10);
+
 
     // 4. Criar sessão Stripe
     const successUrl = `${process.env.FRONTEND_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`;
@@ -153,9 +155,7 @@ router.post("/create-checkout-session", async (req, res) => {
         {
           price_data: {
             currency,
-            product_data: { 
-                name: descriptiveProductName, // 🔴 USANDO O NOVO NOME DESCRITIVO
-            },
+            product_data: { name: productName },
             unit_amount: finalAmountToChargeCents,
           },
           quantity: 1,
@@ -175,11 +175,10 @@ router.post("/create-checkout-session", async (req, res) => {
         platformPctOriginal: platformPctOriginal * 100,
       },
       payment_intent_data: {
-        application_fee_amount: applicationFeeCents,
-        // ❌ REMOVIDO: transfer_data é removido para que o dinheiro fique na conta da plataforma
-        // transfer_data: {
-        //   destination: partner.stripe_account_id,
-        // },
+        application_fee_amount: finalApplicationFee, // <-- Usar o valor inteiro validado
+        transfer_data: {
+          destination: partner.stripe_account_id,
+        },
       },
     });
 
