@@ -5,6 +5,7 @@ import 'dotenv/config.js';
 
 import paymentsRouter from './routes/payments.js';
 import vouchersRouter from './routes/vouchers.js';
+import partnersRouter from './routes/partners.js';
 import { initDb } from './db.js';
 
 const app = express();
@@ -47,6 +48,7 @@ app.use(express.json());
 // 🧭 Rotas
 app.use('/api/payments', paymentsRouter);
 app.use('/api/vouchers', vouchersRouter);
+app.use('/api/partners', partnersRouter);
 
 // 🚀 Inicialização
 const port = process.env.PORT || 3000;
