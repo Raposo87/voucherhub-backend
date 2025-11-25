@@ -93,6 +93,12 @@ async function run() {
         price_original_cents = EXCLUDED.price_original_cents,
         voucher_validity_days = 60;
     `,
+    // LIMPEZA MANUAL DE ID DE CONTA STRIPE INVÁLIDA (CORREÇÃO ERRO 500)
+    `
+    UPDATE partners
+    SET stripe_account_id = NULL
+    WHERE slug = 'yoga-kula' AND stripe_account_id IS NOT NULL;
+    `,
   ];
 
   try {
