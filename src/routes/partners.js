@@ -19,7 +19,7 @@ router.post("/create-onboarding-link", async (req, res) => {
   const { partnerSlug, partnerEmail } = req.body;
   const client = await pool.connect();
 
-  if (!partnerSlug || !partnerEmail) {
+  if (!partnerSlug) {
     return res.status(400).json({ error: "Slug e Email do parceiro são obrigatórios." });
   }
 
