@@ -186,14 +186,6 @@ router.post("/create-checkout-session", async (req, res) => {
         partnerShareCents: partnerShareCents,
         finalAmountToChargeCents,
       },
-      payment_intent_data: {
-        // Agora apenas a taxa da plataforma; o repasse será feito manualmente mais tarde
-        application_fee_amount: finalApplicationFee,
-        // ❌ REMOVIDO: transfer_data.destination (fundos ficam na conta da plataforma)
-        // transfer_data: {
-        //   destination: partner.stripe_account_id,
-        // },
-      },
     });
 
     await client.query("COMMIT");
