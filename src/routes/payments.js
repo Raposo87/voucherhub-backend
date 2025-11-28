@@ -20,10 +20,10 @@ function normalize(code) {
 
 // Formatar data em português
 function formatDatePT(date) {
-  return new Date(date).toLocaleDateString('pt-PT', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
+  return new Date(date).toLocaleDateString("pt-PT", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
   });
 }
 
@@ -53,7 +53,7 @@ router.post("/create-checkout-session", async (req, res) => {
     const sponsorCode = normalize(rawSponsorCode);
     let extraDiscount = 0;
     let sponsorName = null;
-    
+
     await client.query("BEGIN");
 
     // 1. Buscar parceiro
@@ -72,7 +72,8 @@ router.post("/create-checkout-session", async (req, res) => {
     if (!partner.stripe_account_id) {
       await client.query("ROLLBACK");
       return res.status(400).json({
-        error: "Parceiro não tem stripe_account_id configurado – configure no banco.",
+        error:
+          "Parceiro não tem stripe_account_id configurado – configure no banco.",
       });
     }
 
@@ -85,19 +86,25 @@ router.post("/create-checkout-session", async (req, res) => {
 
       if (!rows.length) {
         await client.query("ROLLBACK");
-        return res.status(400).json({ error: "Código especial inválido." });
+        return res
+          .status(400)
+          .json({ error: "Código especial inválido." });
       }
 
       const voucher = rows[0];
 
       if (voucher.used) {
         await client.query("ROLLBACK");
-        return res.status(400).json({ error: "Este código especial já foi utilizado." });
+        return res
+          .status(400)
+          .json({ error: "Este código especial já foi utilizado." });
       }
 
       if (!voucher.discount_extra || voucher.discount_extra <= 0) {
         await client.query("ROLLBACK");
-        return res.status(400).json({ error: "Código especial não possui desconto ativo." });
+        return res.status(400).json({
+          error: "Código especial não possui desconto ativo.",
+        });
       }
 
       extraDiscount = voucher.discount_extra;
@@ -106,7 +113,7 @@ router.post("/create-checkout-session", async (req, res) => {
 
     // 3. Cálculo financeiro
     const incomingCents = Number(amountCents);
-    
+
     if (!Number.isFinite(incomingCents) || incomingCents <= 0) {
       await client.query("ROLLBACK");
       return res.status(400).json({ error: "amountCents inválido." });
@@ -118,19 +125,31 @@ router.post("/create-checkout-session", async (req, res) => {
     const platformPctOriginal = 0.18;
 
     if (extraDiscount > 0) {
-      const multiplier = 1 - (extraDiscount / 100);
+      const multiplier = 1 - extraDiscount / 100;
       finalAmountToChargeCents = Math.round(baseAmountCents * multiplier);
-      const platformPctFinal = platformPctOriginal - (extraDiscount / 100); 
-      applicationFeeCents = Math.round(baseAmountCents * platformPctFinal);
+
+      // Percentagem efetiva da plataforma após desconto patrocinador
+      const platformPctFinal = platformPctOriginal - extraDiscount / 100;
+      applicationFeeCents = Math.round(
+        baseAmountCents * platformPctFinal
+      );
     } else {
-      applicationFeeCents = Math.round(incomingCents * platformPctOriginal);
+      applicationFeeCents = Math.round(
+        incomingCents * platformPctOriginal
+      );
     }
-    
+
+    // Garante pelo menos 1 cêntimo
     applicationFeeCents = Math.max(1, applicationFeeCents);
 
-    // 🔑 NOVO PASSO: Garante que a taxa é um número inteiro válido
+    // 🔑 Taxa da plataforma como inteiro final
     const finalApplicationFee = parseInt(applicationFeeCents, 10);
-    // FIM DA CORREÇÃO
+
+    // 💡 NOVO: valor estimado do parceiro (com base no valor cobrado, já com descontos)
+    const partnerShareCents = Math.max(
+      0,
+      finalAmountToChargeCents - finalApplicationFee
+    );
 
     // 4. Criar sessão Stripe
     const successUrl = `${process.env.FRONTEND_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`;
@@ -162,12 +181,18 @@ router.post("/create-checkout-session", async (req, res) => {
         sponsorName: sponsorName || "",
         baseAmountCents,
         platformPctOriginal: platformPctOriginal * 100,
+        // 💡 NOVO: info para gestão de repasse posterior
+        partnerStripeId: partner.stripe_account_id,
+        partnerShareCents: partnerShareCents,
+        finalAmountToChargeCents,
       },
       payment_intent_data: {
-        application_fee_amount: finalApplicationFee, // <-- Usar o valor inteiro validado
-        transfer_data: {
-          destination: partner.stripe_account_id,
-        },
+        // Agora apenas a taxa da plataforma; o repasse será feito manualmente mais tarde
+        application_fee_amount: finalApplicationFee,
+        // ❌ REMOVIDO: transfer_data.destination (fundos ficam na conta da plataforma)
+        // transfer_data: {
+        //   destination: partner.stripe_account_id,
+        // },
       },
     });
 
@@ -176,7 +201,9 @@ router.post("/create-checkout-session", async (req, res) => {
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("❌ ERRO CREATE-SESSION:", err);
-    return res.status(500).json({ error: "Erro ao criar checkout session" });
+    return res
+      .status(500)
+      .json({ error: "Erro ao criar checkout session" });
   } finally {
     client.release();
   }
@@ -205,20 +232,27 @@ router.post("/webhook", async (req, res) => {
   const session = event.data.object;
 
   try {
-    const email = session.customer_details?.email || session.metadata?.email || "no-email";
+    const email =
+      session.customer_details?.email ||
+      session.metadata?.email ||
+      "no-email";
     const partnerSlug = session.metadata?.partnerSlug;
     const productName = session.metadata?.productName;
     const sponsorCode = normalize(session.metadata?.sponsorCode);
     const extraDiscount = Number(session.metadata?.extraDiscount || 0);
     const sponsorName = session.metadata?.sponsorName || "";
-    
-    const originalPriceCents = Number(session.metadata?.originalPriceCents || 0);
-    const baseAmountCents = Number(session.metadata?.baseAmountCents || session.amount_total);
+
+    const originalPriceCents = Number(
+      session.metadata?.originalPriceCents || 0
+    );
+    const baseAmountCents = Number(
+      session.metadata?.baseAmountCents || session.amount_total
+    );
     const amountCents = session.amount_total;
     const currency = session.currency || "eur";
-    
+
     // 🟢 NOVO: Obtém o ID da transação
-    const paymentIntentId = session.payment_intent; 
+    const paymentIntentId = session.payment_intent;
 
     // Cálculos para comissão
     const platformPctOriginal = 0.18;
@@ -226,11 +260,16 @@ router.post("/webhook", async (req, res) => {
     let partnerShareCents;
 
     if (extraDiscount > 0) {
-      const platformPctFinal = platformPctOriginal - extraDiscount / 100;
-      platformFeeCents = Math.round(baseAmountCents * platformPctFinal);
+      const platformPctFinal =
+        platformPctOriginal - extraDiscount / 100;
+      platformFeeCents = Math.round(
+        baseAmountCents * platformPctFinal
+      );
       partnerShareCents = amountCents - platformFeeCents;
     } else {
-      platformFeeCents = Math.round(amountCents * platformPctOriginal);
+      platformFeeCents = Math.round(
+        amountCents * platformPctOriginal
+      );
       partnerShareCents = amountCents - platformFeeCents;
     }
 
@@ -244,7 +283,7 @@ router.post("/webhook", async (req, res) => {
     );
     const partner = partnerRes.rows[0] || {};
     const daysValidity = partner.voucher_validity_days || 60;
-    
+
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + daysValidity);
 
@@ -253,7 +292,7 @@ router.post("/webhook", async (req, res) => {
       `INSERT INTO vouchers (
         email, partner_slug, code, amount_cents, currency, 
         stripe_session_id, stripe_payment_intent_id, expires_at, platform_fee_cents, partner_share_cents
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, // 🔴 NOVO: Adicionado um placeholder ($7) para o Payment Intent ID
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [
         email,
         partnerSlug,
@@ -261,7 +300,7 @@ router.post("/webhook", async (req, res) => {
         amountCents,
         currency,
         session.id,
-        paymentIntentId, // 🔴 Armazenando o Payment Intent ID
+        paymentIntentId,
         expiryDate.toISOString(),
         platformFeeCents,
         partnerShareCents,
@@ -279,27 +318,44 @@ router.post("/webhook", async (req, res) => {
     }
 
     // ------------------------------------------------------------
-    // ENVIAR EMAIL COM QR CODE E INFORMAÇÕES COMPLETAS (O CÓDIGO HTML FOI MANTIDO COMO ESTAVA NO SEU UPLOAD)
+    // ENVIAR EMAIL COM QR CODE E INFORMAÇÕES COMPLETAS
     // ------------------------------------------------------------
     const validateUrl = `${process.env.FRONTEND_URL}/validate.html?code=${code}`;
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(validateUrl)}`;
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
+      validateUrl
+    )}`;
 
     const originalPriceEuros = (originalPriceCents / 100).toFixed(2);
     const amountPaidEuros = (amountCents / 100).toFixed(2);
-    const totalSavedEuros = ((originalPriceCents - amountCents) / 100).toFixed(2);
-    const totalDiscountPct = Math.round(((originalPriceCents - amountCents) / originalPriceCents) * 100);
-    
+    const totalSavedEuros = (
+      (originalPriceCents - amountCents) /
+      100
+    ).toFixed(2);
+    const totalDiscountPct = Math.round(
+      ((originalPriceCents - amountCents) / originalPriceCents) * 100
+    );
+
     const expiryDateFormatted = formatDatePT(expiryDate);
 
     let html;
 
     if (extraDiscount > 0) {
-        // CLIENTE COM CÓDIGO DE PATROCINADOR
-        const standardDiscPct = Math.round(((originalPriceCents - baseAmountCents) / originalPriceCents) * 100);
-        const partnerDiscountEuros = ((originalPriceCents - baseAmountCents) / 100).toFixed(2);
-        const extraDiscountEuros = ((baseAmountCents - amountCents) / 100).toFixed(2);
-        
-        html = `
+      // CLIENTE COM CÓDIGO DE PATROCINADOR
+      const standardDiscPct = Math.round(
+        ((originalPriceCents - baseAmountCents) /
+          originalPriceCents) *
+          100
+      );
+      const partnerDiscountEuros = (
+        (originalPriceCents - baseAmountCents) /
+        100
+      ).toFixed(2);
+      const extraDiscountEuros = (
+        (baseAmountCents - amountCents) /
+        100
+      ).toFixed(2);
+
+      html = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -370,10 +426,24 @@ router.post("/webhook", async (req, res) => {
         <div style="padding: 0 30px 30px 30px;">
             <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333; font-weight: 600;">📍 Informações do Parceiro</h3>
             <div style="background: #f8f9ff; padding: 20px; border-radius: 8px;">
-                <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #667eea;">${partner.name || 'Parceiro'}</p>
-                ${partner.location ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📍 Localização:</strong> ${partner.location}</p>` : ''} 
-                ${partner.phone ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📞 Telefone:</strong> ${partner.phone}</p>` : ''}
-                ${partner.email ? `<p style="margin: 0; font-size: 14px; color: #666;"><strong>✉️ E-mail:</strong> ${partner.email}</p>` : ''}
+                <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #667eea;">${
+                  partner.name || "Parceiro"
+                }</p>
+                ${
+                  partner.location
+                    ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📍 Localização:</strong> ${partner.location}</p>`
+                    : ""
+                } 
+                ${
+                  partner.phone
+                    ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📞 Telefone:</strong> ${partner.phone}</p>`
+                    : ""
+                }
+                ${
+                  partner.email
+                    ? `<p style="margin: 0; font-size: 14px; color: #666;"><strong>✉️ E-mail:</strong> ${partner.email}</p>`
+                    : ""
+                }
             </div>
         </div>
 
@@ -397,10 +467,10 @@ router.post("/webhook", async (req, res) => {
     </div>
 </body>
 </html>
-        `;
+      `;
     } else {
-        // CLIENTE NORMAL
-        html = `
+      // CLIENTE NORMAL
+      html = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -467,10 +537,24 @@ router.post("/webhook", async (req, res) => {
         <div style="padding: 0 30px 30px 30px;">
             <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333; font-weight: 600;">📍 Informações do Parceiro</h3>
             <div style="background: #f8f9ff; padding: 20px; border-radius: 8px;">
-                <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #667eea;">${partner.name || 'Parceiro'}</p>
-                ${partner.location ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📍 Localização:</strong> ${partner.location}</p>` : ''}
-                ${partner.phone ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📞 Telefone:</strong> ${partner.phone}</p>` : ''}
-                ${partner.email ? `<p style="margin: 0; font-size: 14px; color: #666;"><strong>✉️ E-mail:</strong> ${partner.email}</p>` : ''}
+                <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #667eea;">${
+                  partner.name || "Parceiro"
+                }</p>
+                ${
+                  partner.location
+                    ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📍 Localização:</strong> ${partner.location}</p>`
+                    : ""
+                }
+                ${
+                  partner.phone
+                    ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📞 Telefone:</strong> ${partner.phone}</p>`
+                    : ""
+                }
+                ${
+                  partner.email
+                    ? `<p style="margin: 0; font-size: 14px; color: #666;"><strong>✉️ E-mail:</strong> ${partner.email}</p>`
+                    : ""
+                }
             </div>
         </div>
 
@@ -494,7 +578,7 @@ router.post("/webhook", async (req, res) => {
     </div>
 </body>
 </html>
-        `;
+      `;
     }
 
     await sendEmail({
