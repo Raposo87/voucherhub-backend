@@ -24,7 +24,7 @@ router.post("/validate", async (req, res) => {
   // 2. Variável de Controle: Se o PIN existe, é uma tentativa de uso (portão de segurança)
   const isUsageAttempt = !!pin; 
 
-  const client = await pool.connect(); // 🧹 Removida declaração duplicada
+  const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
@@ -32,7 +32,7 @@ router.post("/validate", async (req, res) => {
     // 1. Buscar o voucher e os dados do parceiro (incluindo o PIN e o Stripe ID)
     const voucherRes = await client.query(
       `SELECT 
-        v.id, v.used, v.expires_at, v.stripe_payment_intent_id, 
+        v.id, v.is_used, v.expires_at, v.stripe_payment_intent_id,  -- 🔴 CORRIGIDO: v.is_used
         v.partner_share_cents, v.partner_slug, v.product_name, p.stripe_account_id, p.pin
       FROM vouchers v
       JOIN partners p ON v.partner_slug = p.slug
@@ -63,7 +63,7 @@ router.post("/validate", async (req, res) => {
       }
 
       // 3. Verificar o estado do voucher (usado ou expirado) - SÓ AQUI!
-      if (voucher.used) {
+      if (voucher.is_used) { // 🔴 CORRIGIDO: voucher.is_used
         await client.query("ROLLBACK");
         return res.status(400).json({ error: "Voucher já utilizado." });
       }
@@ -112,7 +112,7 @@ router.post("/validate", async (req, res) => {
 
       // 5. Marcar o voucher como utilizado na base de dados - SÓ AQUI!
       await client.query(
-        "UPDATE vouchers SET used = TRUE, used_at = NOW() WHERE id = $1",
+        "UPDATE vouchers SET is_used = TRUE, used_at = NOW() WHERE id = $1", // 🔴 CORRIGIDO: SET is_used = TRUE
         [voucher.id]
       );
 
@@ -130,7 +130,7 @@ router.post("/validate", async (req, res) => {
     // ==========================================================
 
     // 6. STATUS CHECK RETURN (Se não for tentativa de uso, devolve apenas o status)
-    if (voucher.used) {
+    if (voucher.is_used) { // 🔴 CORRIGIDO: voucher.is_used
         return res.status(200).json({ status: "used", error: "Voucher já utilizado." });
     }
     if (isExpired) {
