@@ -46,9 +46,9 @@ router.post("/create-checkout-session", async (req, res) => {
       sponsorCode: rawSponsorCode,
     } = req.body;
 
+    
 
-
-    if (!email || !productName || !amountCents || typeof partnerSlug !== "string") {
+    if (!email || !partnerSlug || !productName || !amountCents) {
       return res.status(400).json({
         error: "Missing fields: email, partnerSlug, productName, amountCents",
       });
