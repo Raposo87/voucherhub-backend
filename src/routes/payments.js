@@ -49,7 +49,7 @@ router.post("/create-checkout-session", async (req, res) => {
     console.log("🔥 partnerSlug recebido NO BACKEND:", partnerSlug);
 
 
-    if (!email || !productName || !amountCents || !partnerSlug) {
+    if (!email || !productName || !amountCents || typeof partnerSlug !== "string") {
       return res.status(400).json({
         error: "Missing fields: email, partnerSlug, productName, amountCents",
       });
