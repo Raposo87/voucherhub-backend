@@ -30,11 +30,11 @@ router.post("/validate", async (req, res) => {
     await client.query("BEGIN");
 
     // 1. Buscar o voucher e os dados do parceiro
-    // 💡 CORRIGIDO: Usando v.status, v.used_at e v.product_name da sua tabela
+    // 💡 CORRIGIDO: Usando v.status, v.used_at da sua tabela
     const voucherRes = await client.query(
       `SELECT 
         v.id, v.status, v.expires_at, v.stripe_payment_intent_id, 
-        v.partner_share_cents, v.partner_slug, v.product_name, p.stripe_account_id, p.pin
+        v.partner_share_cents, v.partner_slug, p.stripe_account_id, p.pin
       FROM vouchers v
       JOIN partners p ON v.partner_slug = p.slug
       WHERE v.code = $1
@@ -91,7 +91,7 @@ router.post("/validate", async (req, res) => {
                       amount: transferAmount,
                       currency: 'eur',
                       destination: destinationAccountId,
-                      source_transaction: voucher.stripe_payment_intent_id,
+                      
                       metadata: {
                           voucher_code: code,
                           partner_slug: voucher.partner_slug,
