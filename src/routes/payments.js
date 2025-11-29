@@ -46,7 +46,6 @@ router.post("/create-checkout-session", async (req, res) => {
       sponsorCode: rawSponsorCode,
     } = req.body;
 
-    console.log("🔥 partnerSlug recebido NO BACKEND:", partnerSlug);
 
 
     if (!email || !productName || !amountCents || typeof partnerSlug !== "string") {
