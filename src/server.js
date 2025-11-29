@@ -10,47 +10,57 @@ import { initDb } from './db.js';
 
 const app = express();
 
-// 🌐 CONFIGURAÇÃO CORS CORRETA:
-// Lista de origens permitidas (inclui seu ambiente local de desenvolvimento atual)
+// 🌐 CONFIGURAÇÃO CORS CORRETA
 const allowedOrigins = [
   'https://modest-comfort-production.up.railway.app',
   'https://voucherhub.pt',
   'https://www.voucherhub.pt',
   'http://localhost:3000',
-  'http://localhost:5500', // <-- ADICIONADO: URL comum para Live Server
-  'http://127.0.0.1:5500' // <-- ADICIONADO: URL exata do seu erro
+  'http://localhost:5500',
+  'http://127.0.0.1:5500'
 ];
 
-// Configure as opções do CORS
 const corsOptions = {
-    origin: allowedOrigins, // Usa a lista de origens que você já definiu
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: true,
+  origin: allowedOrigins,
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+  credentials: true,
 };
 
-// Aplica o middleware CORS ANTES DE QUALQUER ROTA
+// CORS deve vir ANTES de qualquer rota
 app.use(cors(corsOptions));
 
-// --- O RESTO DO SEU CÓDIGO PERMANECE O MESMO ---
 
-// ✅ Health check
-app.get('/health', (req, res) => res.status(200).json({ ok: true }));
+// =============================================================
+// 1️⃣ JSON NORMAL PARA TODAS AS ROTAS EXCETO WEBHOOK
+// =============================================================
+app.use(express.json());
 
-// ⚙️ Usa raw body apenas no webhook Stripe
+// =============================================================
+// 2️⃣ ROTAS NORMAIS DO BACKEND (payments, vouchers, partners)
+// =============================================================
+app.use('/api/payments', paymentsRouter);
+app.use('/api/vouchers', vouchersRouter);
+app.use('/api/partners', partnersRouter);
+
+
+// =============================================================
+// 3️⃣ WEBHOOK STRIPE (usa RAW BODY → TEM QUE VIR DEPOIS DAS ROTAS NORMAIS!)
+// =============================================================
 app.use(
   '/api/payments/webhook',
   bodyParser.raw({ type: 'application/json' })
 );
 
-// 🧠 Para o resto, usa JSON normal
-app.use(express.json());
 
-// 🧭 Rotas
-app.use('/api/payments', paymentsRouter);
-app.use('/api/vouchers', vouchersRouter);
-app.use('/api/partners', partnersRouter);
+// =============================================================
+// HEALTH CHECK
+// =============================================================
+app.get('/health', (req, res) => res.status(200).json({ ok: true }));
 
-// 🚀 Inicialização
+
+// =============================================================
+// START SERVER
+// =============================================================
 const port = process.env.PORT || 3000;
 
 initDb()
