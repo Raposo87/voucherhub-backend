@@ -2,6 +2,16 @@ import { Router } from "express";
 import Stripe from "stripe";
 import { pool } from "../db.js";
 
+router.get("/debug-partner", async (req, res) => {
+  try {
+    const r = await pool.query("SELECT slug FROM partners");
+    res.json(r.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 const router = Router();
 // Certifique-se de que a variável STRIPE_SECRET_KEY é a de PRODUÇÃO
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
