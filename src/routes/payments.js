@@ -46,7 +46,10 @@ router.post("/create-checkout-session", async (req, res) => {
       sponsorCode: rawSponsorCode,
     } = req.body;
 
-    if (!email || !partnerSlug || !productName || !amountCents) {
+    console.log("🔥 partnerSlug recebido NO BACKEND:", partnerSlug);
+
+
+    if (!email || !productName || !amountCents || !partnerSlug) {
       return res.status(400).json({
         error: "Missing fields: email, partnerSlug, productName, amountCents",
       });
