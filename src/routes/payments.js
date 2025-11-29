@@ -5,8 +5,6 @@ import { sendEmail } from "../utils/sendEmail.js";
 import { randomBytes } from "crypto";
 
 const router = Router();
-
-
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2024-06-20",
 });
@@ -45,8 +43,6 @@ router.post("/create-checkout-session", async (req, res) => {
       currency = "eur",
       sponsorCode: rawSponsorCode,
     } = req.body;
-
-    
 
     if (!email || !partnerSlug || !productName || !amountCents) {
       return res.status(400).json({
@@ -206,7 +202,7 @@ router.post("/create-checkout-session", async (req, res) => {
 });
 
 // ==========================================================
-// 2) STRIPE WEBHOOK (AGORA ARMAZENA O CHARGE ID CORRETO)
+// 2) STRIPE WEBHOOK (AGORA ARMAZENA O Payment Intent ID)
 // ==========================================================
 router.post("/webhook", async (req, res) => {
   let event;
@@ -247,14 +243,8 @@ router.post("/webhook", async (req, res) => {
     const amountCents = session.amount_total;
     const currency = session.currency || "eur";
 
-    // 🔴 MUDANÇA CRÍTICA 1: Buscar o Charge ID (ch_...)
+    // 🟢 NOVO: Obtém o ID da transação
     const paymentIntentId = session.payment_intent;
-    
-    // É essencial buscar o Payment Intent completo para obter o Charge ID (latest_charge)
-    // O Charge ID é o que referencia o dinheiro retido na sua conta (Escrow)
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-    const sourceChargeId = paymentIntent.latest_charge;
-
 
     // Cálculos para comissão
     const platformPctOriginal = 0.18;
@@ -280,7 +270,7 @@ router.post("/webhook", async (req, res) => {
 
     // Buscar informações do parceiro
     const partnerRes = await pool.query(
-      "SELECT voucher_validity_days, name, location, phone, email, partner_pin FROM partners WHERE slug = $1",
+      "SELECT voucher_validity_days, name, location, phone, email FROM partners WHERE slug = $1",
       [partnerSlug]
     );
     const partner = partnerRes.rows[0] || {};
@@ -289,35 +279,24 @@ router.post("/webhook", async (req, res) => {
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + daysValidity);
 
-    // 💡 NOVO: Valor do voucher em Euros (para coluna 'value' DECIMAL)
-    const valueEuros = (amountCents / 100).toFixed(2);
-    // 💡 NOVO: Data limite para uso (para coluna 'valid_until' DATE)
-    const validUntilDate = expiryDate.toISOString().split('T')[0];
-
-
-    // 🔴 MUDANÇA CRÍTICA 2: Inserir Voucher com o Charge ID (sourceChargeId)
-    // E todas as colunas do schema que estavam em falta (product_name, value, valid_until, status)
+    // Inserir Voucher
     await pool.query(
       `INSERT INTO vouchers (
-        email, partner_slug, code, amount_cents, currency, product_name, 
-        stripe_session_id, stripe_payment_intent_id, expires_at, platform_fee_cents, partner_share_cents,
-        value, valid_until, status
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        email, partner_slug, code, amount_cents, currency, 
+        stripe_session_id, stripe_payment_intent_id, expires_at, platform_fee_cents, partner_share_cents
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [
-        email,                      // $1
-        partnerSlug,                // $2
-        code,                       // $3
-        amountCents,                // $4
-        currency,                   // $5
-        productName,                // $6 (NOVO)
-        session.id,                 // $7
-        sourceChargeId,             // $8 (CORRIGIDO: ch_ ID)
-        expiryDate.toISOString(),   // $9
-        platformFeeCents,           // $10
-        partnerShareCents,          // $11
-        valueEuros,                 // $12 (NOVO)
-        validUntilDate,             // $13 (NOVO)
-        'active'                    // $14 (NOVO, valor padrão)
+        email,
+        partnerSlug,
+        code,
+        amountCents,
+        currency,
+        session.id,
+        paymentIntentId,
+        expiryDate.toISOString(),
+        platformFeeCents,
+        partnerShareCents,
+        'valid'
       ]
     );
 
@@ -455,7 +434,7 @@ router.post("/webhook", async (req, res) => {
                 }
                 ${
                   partner.email
-                    ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>✉️ E-mail:</strong> ${partner.email}</p>`
+                    ? `<p style="margin: 0; font-size: 14px; color: #666;"><strong>✉️ E-mail:</strong> ${partner.email}</p>`
                     : ""
                 }
             </div>
@@ -566,7 +545,7 @@ router.post("/webhook", async (req, res) => {
                 }
                 ${
                   partner.email
-                    ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>✉️ E-mail:</strong> ${partner.email}</p>`
+                    ? `<p style="margin: 0; font-size: 14px; color: #666;"><strong>✉️ E-mail:</strong> ${partner.email}</p>`
                     : ""
                 }
             </div>
