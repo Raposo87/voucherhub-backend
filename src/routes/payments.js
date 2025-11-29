@@ -5,6 +5,24 @@ import { sendEmail } from "../utils/sendEmail.js";
 import { randomBytes } from "crypto";
 
 const router = Router();
+
+
+
+
+router.get("/debug-partner", async (req, res) => {
+  try {
+    const r = await pool.query("SELECT slug FROM partners");
+    res.json(r.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+
+
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2024-06-20",
 });
