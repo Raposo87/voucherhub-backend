@@ -296,6 +296,7 @@ router.post("/webhook", async (req, res) => {
         expiryDate.toISOString(),
         platformFeeCents,
         partnerShareCents,
+        'valid'
       ]
     );
 
