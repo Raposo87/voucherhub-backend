@@ -247,7 +247,7 @@ router.post("/webhook", async (req, res) => {
     const paymentIntentId = session.payment_intent;
 
     // Cálculos para comissão
-    const platformPctOriginal = 0.18;
+    const platformPctOriginal = Number(process.env.PLATFORM_FEE || 0.18);
     let platformFeeCents;
     let partnerShareCents;
 
