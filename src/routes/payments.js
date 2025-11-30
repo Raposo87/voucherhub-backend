@@ -122,7 +122,8 @@ router.post("/create-checkout-session", async (req, res) => {
     let baseAmountCents = incomingCents;
     let finalAmountToChargeCents = incomingCents;
     let applicationFeeCents;
-    const platformPctOriginal = 0.18;
+    const platformPctOriginal = Number(process.env.PLATFORM_FEE || 0.18);
+
 
     if (extraDiscount > 0) {
       const multiplier = 1 - extraDiscount / 100;
