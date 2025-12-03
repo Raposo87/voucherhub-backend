@@ -13,8 +13,8 @@ import { pool } from './src/db.js';
 
 async function run() {
   try {
-    const slug = 'surf-wave-lisbon'; // <-- ALTERE AQUI PARA O SLUG CORRETO
-    const stripeId = 'acct_1SW2EfLtgtiOYNfV'; // <-- SEU STRIPE CONNECT ACCOUNT ID
+    const slug = 'loopitour'; // <-- ALTERE AQUI PARA O SLUG CORRETO
+    const stripeId = 'conta_1SZzyqLDZjWc3hZz'; // <-- SEU STRIPE CONNECT ACCOUNT ID
 
     const result = await pool.query(
       `UPDATE partners SET stripe_account_id = $1 WHERE slug = $2`,

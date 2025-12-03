@@ -93,6 +93,20 @@ async function run() {
         price_original_cents = EXCLUDED.price_original_cents,
         voucher_validity_days = 60;
     `,
+
+    // SLUG: loopitour //
+    `
+    INSERT INTO partners (slug, name, email, phone, location, price_original_cents, voucher_validity_days, pin) VALUES
+      ('loopitour', 'Loopitour', 'loopitour@gmail.com', '+351 925 987 650', 'Rua Heliodoro Salgado, 1170-174 Lisboa Ímpares de 1 a 47A', 9500, 60, '5566')
+    ON CONFLICT (slug) DO UPDATE SET 
+        name = EXCLUDED.name,
+        email = EXCLUDED.email,
+        phone = EXCLUDED.phone,
+        location = EXCLUDED.location, 
+        price_original_cents = EXCLUDED.price_original_cents,
+        voucher_validity_days = 60;
+    `,
+
     // LIMPEZA MANUAL DE ID DE CONTA STRIPE INVÁLIDA (CORREÇÃO ERRO 500)
     `
     UPDATE partners
