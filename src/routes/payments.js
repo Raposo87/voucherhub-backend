@@ -370,13 +370,14 @@ router.post("/webhook", async (req, res) => {
             </div>
             <p style="margin: 15px 0 5px 0; font-size: 14px; color: #666; font-weight: 500;">SEU CÓDIGO VOUCHER</p>
             <p style="margin: 0; font-size: 24px; font-weight: bold; color: #667eea; letter-spacing: 2px;">${code}</p>
-            <p style="margin: 10px 0 0 0; font-size: 13px; color: #888;">Apresente este código ao parceiro</p>
+            <p style="margin: 10px 0 0 0; font-size: 13px; color: #888;">Apresente este QR Code ao parceiro</p>
         </div>
 
         <div style="padding: 0 30px 20px 30px;">
             <div style="background: #f8f9ff; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea;">
                 <h3 style="margin: 0 0 5px 0; font-size: 18px; color: #333;">📦 ${productName}</h3>
                 <p style="margin: 0; font-size: 14px; color: #666;">Experiência adquirida com sucesso</p>
+                <p style="margin: 0; font-size: 14px; color: #888;">(Contacte o parceiro para agendar o melhor dia e horario para a sua experiencia)</p>
             </div>
         </div>
 
