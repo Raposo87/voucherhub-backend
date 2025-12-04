@@ -3,7 +3,7 @@ import bodyParser from 'body-parser'; // Mantenha o import do bodyParser
 import cors from 'cors';
 import 'dotenv/config.js';
 
-import paymentsRouter, { handleWebhook } from './routes/payments.js'; // Importe a função 'handleWebhook' separadamente (veja nota abaixo)
+import paymentsRouter from './routes/payments.js';
 import vouchersRouter from './routes/vouchers.js';
 import partnersRouter from './routes/partners.js';
 import { initDb } from './db.js';
@@ -14,17 +14,6 @@ const app = express();
 
 // CORS deve vir ANTES de qualquer rota
 app.use(cors(corsOptions));
-
-// =============================================================
-// 1️⃣ CORREÇÃO CRÍTICA: WEBHOOK STRIPE (DEVE VIR PRIMEIRO)
-// =============================================================
-// Esta rota usa o raw body parser e evita o express.json() global.
-app.post(
-  '/api/payments/webhook',
-  bodyParser.raw({ type: 'application/json' }),
-  // Assumindo que você exportou a função de manipulação do webhook do payments.js
-  handleWebhook 
-);
 
 
 // =============================================================
