@@ -10,7 +10,9 @@ import { initDb } from './db.js';
 
 const app = express();
 
-// 🌐 CONFIGURAÇÃO CORS CORRETA
+// =============================================================
+// 1️⃣ CORS
+// =============================================================
 const allowedOrigins = [
   'https://modest-comfort-production.up.railway.app',
   'https://voucherhub.pt',
@@ -20,57 +22,44 @@ const allowedOrigins = [
   'http://127.0.0.1:5500'
 ];
 
-const corsOptions = {
-  origin: allowedOrigins,
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-  credentials: true,
-};
-
-// CORS deve vir ANTES de qualquer rota
-app.use(cors(corsOptions));
-
+app.use(cors({ origin: allowedOrigins }));
 
 // =============================================================
-// 1️⃣ JSON NORMAL PARA TODAS AS ROTAS EXCETO WEBHOOK
+// 2️⃣ WEBHOOK DA STRIPE — TEM QUE VIR ***ANTES DE express.json()***
+// =============================================================
+
+// Encontrar rota exata dentro do paymentsRouter
+const stripeWebhook = paymentsRouter.stack
+  .find(r => r.route?.path === "/webhook" && r.route.methods.post)
+  .route.stack[0].handle;
+
+app.post(
+  "/api/payments/webhook",
+  bodyParser.raw({ type: "application/json" }),
+  stripeWebhook
+);
+
+// =============================================================
+// 3️⃣ DEMO MAIS TODAS AS OUTRAS ROTAS
 // =============================================================
 app.use(express.json());
 
-// =============================================================
-// 2️⃣ ROTAS NORMAIS DO BACKEND (payments, vouchers, partners)
-// =============================================================
 app.use('/api/payments', paymentsRouter);
 app.use('/api/vouchers', vouchersRouter);
 app.use('/api/partners', partnersRouter);
 
+// =============================================================
+// HEALTH
+// =============================================================
+app.get('/health', (req, res) => res.json({ ok: true }));
 
 // =============================================================
-// 3️⃣ WEBHOOK STRIPE (usa RAW BODY → TEM QUE VIR DEPOIS DAS ROTAS NORMAIS!)
-// =============================================================
-app.use(
-  '/api/payments/webhook',
-  bodyParser.raw({ type: 'application/json' })
-);
-
-
-// =============================================================
-// HEALTH CHECK
-// =============================================================
-app.get('/health', (req, res) => res.status(200).json({ ok: true }));
-
-
-// =============================================================
-// START SERVER
+// START
 // =============================================================
 const port = process.env.PORT || 3000;
 
-initDb()
-  .then(() => {
-    app.listen(port, '0.0.0.0', () => {
-      console.log(`✅ VoucherHub backend listening on port ${port}`);
-      console.log('🌐 CORS liberado para:', allowedOrigins.join(', '));
-    });
-  })
-  .catch((err) => {
-    console.error('❌ Failed to init DB', err);
-    process.exit(1);
+initDb().then(() => {
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`🚀 Backend ok na porta ${port}`);
   });
+});
