@@ -55,15 +55,6 @@ app.use('/api/partners', partnersRouter);
 
 
 // =============================================================
-// 3️⃣ WEBHOOK STRIPE (usa RAW BODY → TEM QUE VIR DEPOIS DAS ROTAS NORMAIS!)
-// =============================================================
-app.use(
-  '/api/payments/webhook',
-  bodyParser.raw({ type: 'application/json' })
-);
-
-
-// =============================================================
 // HEALTH CHECK
 // =============================================================
 app.get('/health', (req, res) => res.status(200).json({ ok: true }));
