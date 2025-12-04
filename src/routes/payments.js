@@ -284,7 +284,8 @@ router.post("/webhook", async (req, res) => {
     await pool.query(
       `INSERT INTO vouchers (
         email, partner_slug, code, amount_cents, currency, 
-        stripe_session_id, stripe_payment_intent_id, expires_at, platform_fee_cents, partner_share_cents
+        stripe_session_id, stripe_payment_intent_id, expires_at, 
+        platform_fee_cents, partner_share_cents, status
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       [
         email,
