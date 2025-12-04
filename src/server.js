@@ -1,42 +1,41 @@
 import express from 'express';
-import bodyParser from 'body-parser';
+import bodyParser from 'body-parser'; // Mantenha o import do bodyParser
 import cors from 'cors';
 import 'dotenv/config.js';
 
-import paymentsRouter from './routes/payments.js';
+import paymentsRouter, { handleWebhook } from './routes/payments.js'; // Importe a função 'handleWebhook' separadamente (veja nota abaixo)
 import vouchersRouter from './routes/vouchers.js';
 import partnersRouter from './routes/partners.js';
 import { initDb } from './db.js';
 
 const app = express();
 
-// 🌐 CONFIGURAÇÃO CORS CORRETA
-const allowedOrigins = [
-  'https://modest-comfort-production.up.railway.app',
-  'https://voucherhub.pt',
-  'https://www.voucherhub.pt',
-  'http://localhost:3000',
-  'http://localhost:5500',
-  'http://127.0.0.1:5500'
-];
-
-const corsOptions = {
-  origin: allowedOrigins,
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-  credentials: true,
-};
+// ... (Configuração CORS e allowedOrigins inalteradas) ...
 
 // CORS deve vir ANTES de qualquer rota
 app.use(cors(corsOptions));
 
+// =============================================================
+// 1️⃣ CORREÇÃO CRÍTICA: WEBHOOK STRIPE (DEVE VIR PRIMEIRO)
+// =============================================================
+// Esta rota usa o raw body parser e evita o express.json() global.
+app.post(
+  '/api/payments/webhook',
+  bodyParser.raw({ type: 'application/json' }),
+  // Assumindo que você exportou a função de manipulação do webhook do payments.js
+  handleWebhook 
+);
+
 
 // =============================================================
-// 1️⃣ JSON NORMAL PARA TODAS AS ROTAS EXCETO WEBHOOK
+// 2️⃣ JSON NORMAL PARA TODAS AS OUTRAS ROTAS
 // =============================================================
+// O corpo JSON será analisado AQUI para TODAS as outras rotas (ex: /create-checkout-session)
 app.use(express.json());
 
+
 // =============================================================
-// 2️⃣ ROTAS NORMAIS DO BACKEND (payments, vouchers, partners)
+// 3️⃣ ROTAS NORMAIS DO BACKEND
 // =============================================================
 app.use('/api/payments', paymentsRouter);
 app.use('/api/vouchers', vouchersRouter);
