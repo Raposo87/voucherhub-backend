@@ -1,16 +1,18 @@
-import express from 'express';
-import bodyParser from 'body-parser'; // Mantenha o import do bodyParser
-import cors from 'cors';
-import 'dotenv/config.js';
+import express from "express";
+import bodyParser from "body-parser";
+import cors from "cors";
+import "dotenv/config.js";
 
-import paymentsRouter from './routes/payments.js';
-import vouchersRouter from './routes/vouchers.js';
-import partnersRouter from './routes/partners.js';
-import { initDb } from './db.js';
+import paymentsRouter, { handleWebhook } from "./routes/payments.js";
+import vouchersRouter from "./routes/vouchers.js";
+import partnersRouter from "./routes/partners.js";
+import { initDb } from "./db.js";
 
 const app = express();
 
-// ... (Configuração CORS e allowedOrigins inalteradas) ...
+// =============================================================
+// 1️⃣ CORS
+// =============================================================
 const allowedOrigins = [
   "http://localhost:5500",
   "http://127.0.0.1:5500",
@@ -21,43 +23,43 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Permitir requests sem origin (ex: Stripe Webhooks)
     if (!origin) return callback(null, true);
-
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      console.log("❌ CORS bloqueado para:", origin);
-      return callback(new Error("CORS not allowed"), false);
-    }
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("CORS not allowed"), false);
   },
-  credentials: true,
 };
 
-
-// CORS deve vir ANTES de qualquer rota
 app.use(cors(corsOptions));
 
 
 // =============================================================
-// 2️⃣ JSON NORMAL PARA TODAS AS OUTRAS ROTAS
+// 2️⃣ WEBHOOK STRIPE — DEVE VIR ANTES DO EXPRESS.JSON()
 // =============================================================
-// O corpo JSON será analisado AQUI para TODAS as outras rotas (ex: /create-checkout-session)
+app.post(
+  "/api/payments/webhook",
+  bodyParser.raw({ type: "application/json" }),
+  handleWebhook
+);
+
+
+// =============================================================
+// 3️⃣ EXPRESS.JSON PARA TODAS AS OUTRAS ROTAS
+// =============================================================
 app.use(express.json());
 
 
 // =============================================================
-// 3️⃣ ROTAS NORMAIS DO BACKEND
+// 4️⃣ ROTAS NORMAIS
 // =============================================================
-app.use('/api/payments', paymentsRouter);
-app.use('/api/vouchers', vouchersRouter);
-app.use('/api/partners', partnersRouter);
+app.use("/api/payments", paymentsRouter);
+app.use("/api/vouchers", vouchersRouter);
+app.use("/api/partners", partnersRouter);
 
 
 // =============================================================
 // HEALTH CHECK
 // =============================================================
-app.get('/health', (req, res) => res.status(200).json({ ok: true }));
+app.get("/health", (req, res) => res.status(200).json({ ok: true }));
 
 
 // =============================================================
@@ -65,14 +67,8 @@ app.get('/health', (req, res) => res.status(200).json({ ok: true }));
 // =============================================================
 const port = process.env.PORT || 3000;
 
-initDb()
-  .then(() => {
-    app.listen(port, '0.0.0.0', () => {
-      console.log(`✅ VoucherHub backend listening on port ${port}`);
-      console.log('🌐 CORS liberado para:', allowedOrigins.join(', '));
-    });
-  })
-  .catch((err) => {
-    console.error('❌ Failed to init DB', err);
-    process.exit(1);
-  });
+initDb().then(() => {
+  app.listen(port, "0.0.0.0", () =>
+    console.log(`🚀 Backend rodando na porta ${port}`)
+  );
+});
