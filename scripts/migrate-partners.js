@@ -40,7 +40,7 @@ async function run() {
         location = EXCLUDED.location, 
         price_original_cents = EXCLUDED.price_original_cents,
         voucher_validity_days = 60,
-        stripe_account_id = partners.stripe_account_id;
+        stripe_account_id = EXCLUDED.stripe_account_id;
     `,
     
     // SLUG: twolines
@@ -54,7 +54,7 @@ async function run() {
         location = EXCLUDED.location, 
         price_original_cents = EXCLUDED.price_original_cents,
         voucher_validity_days = 60,
-        stripe_account_id = partners.stripe_account_id;
+        stripe_account_id = EXCLUDED.stripe_account_id;
     `,
 
     // SLUG: nanan-adventures
@@ -68,7 +68,7 @@ async function run() {
         location = EXCLUDED.location, 
         price_original_cents = EXCLUDED.price_original_cents,
         voucher_validity_days = 60,
-        stripe_account_id = partners.stripe_account_id;
+        stripe_account_id = EXCLUDED.stripe_account_id;
     `,
 
     // SLUG: yoga-kula
@@ -82,7 +82,7 @@ async function run() {
         location = EXCLUDED.location, 
         price_original_cents = EXCLUDED.price_original_cents,
         voucher_validity_days = 60,
-        stripe_account_id = partners.stripe_account_id;
+        stripe_account_id = EXCLUDED.stripe_account_id;
     `,
 
     // SLUG: espaco-libela
@@ -96,7 +96,7 @@ async function run() {
         location = EXCLUDED.location, 
         price_original_cents = EXCLUDED.price_original_cents,
         voucher_validity_days = 60,
-        stripe_account_id = partners.stripe_account_id;
+        stripe_account_id = EXCLUDED.stripe_account_id;
     `,
 
     // SLUG: loopitour //
@@ -110,7 +110,7 @@ async function run() {
         location = EXCLUDED.location, 
         price_original_cents = EXCLUDED.price_original_cents,
         voucher_validity_days = 60,
-        stripe_account_id = partners.stripe_account_id;
+        stripe_account_id = EXCLUDED.stripe_account_id;
     `,
 
     // SLUG: azonda-surf-club
@@ -124,7 +124,7 @@ ON CONFLICT (slug) DO UPDATE SET
     location = EXCLUDED.location, 
     price_original_cents = EXCLUDED.price_original_cents,
     voucher_validity_days = 60,
-    stripe_account_id = partners.stripe_account_id;
+    stripe_account_id = EXCLUDED.stripe_account_id;
 `,
 
    
