@@ -32,7 +32,7 @@ async function run() {
     // SLUG: surf-wave-lisbon
     `
     INSERT INTO partners (slug, name, email, phone, location, price_original_cents, voucher_validity_days, pin, stripe_account_id) VALUES
-      ('surf-wave-lisbon', 'Surf Wave Lisbon', 'surfwavelisbon@gmail.com', '+351 969 013 614 / +351 961 793 637', 'Cabana do Pescador, Costa da Caparica', 3000, 60, '1234', 'acct_1SZI1ULEy1X3DVbg')
+      ('surf-wave-lisbon', 'Surf Wave Lisbon', 'surfwavelisbon@gmail.com', '+351 969 013 614 / +351 961 793 637', 'Cabana do Pescador, Costa da Caparica', 3000, 60, '5678', 'acct_1SZI1ULEy1X3DVbg')
     ON CONFLICT (slug) DO UPDATE SET 
         name = EXCLUDED.name,
         email = EXCLUDED.email,
@@ -74,7 +74,7 @@ async function run() {
     // SLUG: yoga-kula
     `
     INSERT INTO partners (slug, name, email, phone, location, price_original_cents, voucher_validity_days, pin, stripe_account_id) VALUES
-      ('yoga-kula', 'Yoga Kula', 'geral@yogakulabenfica.com', '(+351)933782610', 'Rua General Morais Sarmento, Nº60, Lisboa', 1500, 60, '5678', 'acct_1SXVcrLNA7rb0Hw5')
+      ('yoga-kula', 'Yoga Kula', 'geral@yogakulabenfica.com', '(+351)933782610', 'Rua General Morais Sarmento, Nº60, Lisboa', 1500, 60, '1234', 'acct_1SXVcrLNA7rb0Hw5')
     ON CONFLICT (slug) DO UPDATE SET 
         name = EXCLUDED.name,
         email = EXCLUDED.email,
@@ -88,7 +88,7 @@ async function run() {
     // SLUG: espaco-libela
     `
     INSERT INTO partners (slug, name, email, phone, location, price_original_cents, voucher_validity_days, pin, stripe_account_id) VALUES
-      ('espaco-libela', 'Espaço libélula', 'nicoleraposof7@gmail.com', '+351 936 065 569', 'Rua Vieira da Silva, 54 Lisboa', 9000, 60, '1122', 'acct_1SZHN8Lh9REGl42S')
+      ('espaco-libela', 'Espaço libélula', 'nicoleraposof7@gmail.com', '+351 936 065 569', 'Rua Vieira da Silva, 54 Lisboa', 9000, 60, '5555', 'acct_1SZHN8Lh9REGl42S')
     ON CONFLICT (slug) DO UPDATE SET 
         name = EXCLUDED.name,
         email = EXCLUDED.email,
