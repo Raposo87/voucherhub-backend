@@ -87,6 +87,7 @@ router.post("/validate", async (req, res) => {
                   amount: transferAmount,
                   currency: 'eur',
                   destination: destinationAccountId,
+                  source_transaction: voucher.stripe_payment_intent_id,
                   metadata: {
                       voucher_code: code,
                       partner_slug: voucher.partner_slug,

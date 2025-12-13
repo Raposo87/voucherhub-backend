@@ -127,7 +127,38 @@ ON CONFLICT (slug) DO UPDATE SET
     stripe_account_id = EXCLUDED.stripe_account_id;
 `,
 
-   
+  // SLUG: ecoasters
+`
+INSERT INTO partners (
+    slug, 
+    name, 
+    email, 
+    phone, 
+    location, 
+    price_original_cents, 
+    voucher_validity_days, 
+    pin, 
+    stripe_account_id
+) VALUES (
+    'ecoasters', 
+    'eCoasters', 
+    'ecoasters24@mailg.com', 
+    '+351 969 638 466', 
+    'Costa da Caparica', 
+    10000,
+    60,
+    3333,
+    NULL
+)
+ON CONFLICT (slug) DO UPDATE SET 
+    name = EXCLUDED.name,
+    email = EXCLUDED.email,
+    phone = EXCLUDED.phone,
+    location = EXCLUDED.location, 
+    price_original_cents = EXCLUDED.price_original_cents,
+    voucher_validity_days = 60;
+`,
+
   ];
 
   try {
