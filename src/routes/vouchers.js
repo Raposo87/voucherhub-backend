@@ -119,11 +119,13 @@ try {
         throw new Error(`Pagamento não concluído (Status: ${paymentIntent.status}).`);
     }
 
-    if (paymentIntent.charges.data.length > 0) {
+    if (paymentIntent.charges?.data && paymentIntent.charges.data.length > 0) { 
         sourceTransactionId = paymentIntent.charges.data[0].id; 
     } else {
+        // Se não houver charges ou o objeto PI estiver incompleto, abortamos.
         console.error(`❌ Payment Intent ${voucher.stripe_payment_intent_id} succeeded mas sem Charge ID.`);
-        throw new Error("ID da Cobrança Stripe não encontrado. Abortando.");
+        // Isso é o que causa o ROLLBACK e a mensagem de erro no frontend
+        throw new Error("ID da Cobrança Stripe não encontrado. Abortando."); 
     }
 
 } catch (intentError) {
