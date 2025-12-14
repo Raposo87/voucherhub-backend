@@ -109,24 +109,26 @@ let sourceTransactionId = null;
 
 // 4A. BUSCAR O ID DA COBRANÇA (CH_...) E VALIDAR O PAGAMENTO
 try {
-    const paymentIntent = await stripe.paymentIntents.retrieve(
-        voucher.stripe_payment_intent_id,
-        { expand: ['charges'] } // Garante que a informação da Cobrança venha junto
-    );
+  const paymentIntent = await stripe.paymentIntents.retrieve(
+      voucher.stripe_payment_intent_id,
+      // 🔑 MUDANÇA CRÍTICA AQUI: Use 'latest_charge' em vez de 'charges'
+      { expand: ['latest_charge'] } 
+  );
 
-    if (paymentIntent.status !== 'succeeded') {
-        console.warn(`⚠️ Payment Intent ${voucher.stripe_payment_intent_id} não concluído (Status: ${paymentIntent.status}). Abortando transferência.`);
-        throw new Error(`Pagamento não concluído (Status: ${paymentIntent.status}).`);
-    }
+  if (paymentIntent.status !== 'succeeded') {
+      console.warn(`⚠️ Payment Intent ${voucher.stripe_payment_intent_id} não concluído (Status: ${paymentIntent.status}). Abortando transferência.`);
+      throw new Error(`Pagamento não concluído (Status: ${paymentIntent.status}).`);
+  }
 
-    if (paymentIntent.charges?.data && paymentIntent.charges.data.length > 0) { 
-        sourceTransactionId = paymentIntent.charges.data[0].id; 
-    } else {
-        // Se não houver charges ou o objeto PI estiver incompleto, abortamos.
-        console.error(`❌ Payment Intent ${voucher.stripe_payment_intent_id} succeeded mas sem Charge ID.`);
-        // Isso é o que causa o ROLLBACK e a mensagem de erro no frontend
-        throw new Error("ID da Cobrança Stripe não encontrado. Abortando."); 
-    }
+  // 🔑 MUDANÇA CRÍTICA AQUI: Pegar o ID diretamente da propriedade latest_charge.
+  // O latest_charge é o objeto da Cobrança (ch_...)
+  if (paymentIntent.latest_charge && paymentIntent.latest_charge.id) {
+      sourceTransactionId = paymentIntent.latest_charge.id; 
+  } else {
+      // Se não houver latest_charge (o que causou o erro), abortamos.
+      console.error(`❌ A intenção de pagamento ${voucher.stripe_payment_intent_id} foi bem-sucedida, mas sem ID de cobrança.`);
+      throw new Error("ID da Cobrança Stripe não encontrado. Abortando."); 
+  }
 
 } catch (intentError) {
     console.error("❌ ERRO GRAVE NO FLUXO DE PAGAMENTO. TRANSFERÊNCIA ABORTADA:", intentError.message);
