@@ -78,63 +78,111 @@ router.post("/validate", async (req, res) => {
       }
 
             // 4. Realizar a Transferência Stripe (Lógica de Escrow)
-      const transferAmount = voucher.partner_share_cents;
-      const destinationAccountId = voucher.stripe_account_id;
+const transferAmount = voucher.partner_share_cents;
+const destinationAccountId = voucher.stripe_account_id;
 
-      try {
-          if (transferAmount > 0 && destinationAccountId) {
-              await stripe.transfers.create({
-                  amount: transferAmount,
-                  currency: 'eur',
-                  destination: destinationAccountId,
-                  source_transaction: voucher.stripe_payment_intent_id,
-                  metadata: {
-                      voucher_code: code,
-                      partner_slug: voucher.partner_slug,
-                      voucher_id: voucher.id
-                  }
-              });
+// VALIDAR AS CONDIÇÕES MÍNIMAS PARA TRANSFERÊNCIA
+if (!destinationAccountId) {
+    console.warn(`⚠️ Parceiro ${voucher.partner_slug} sem Stripe Account ID. Transferência não tentada.`);
+    // Marcar o voucher como usado DEPOIS de alertar (necessário repasse manual)
+    await client.query("UPDATE vouchers SET status = 'used', used_at = NOW(), transfer_status = 'failed:no_stripe_account' WHERE id = $1", [voucher.id]);
+    await client.query("COMMIT");
+    return res.status(200).json({ 
+        success: false, 
+        message: "Voucher validado. ATENÇÃO: Repasse ao parceiro pendente por falta de conta Stripe. Contate o suporte.",
+        code: code 
+    });
+}
+if (transferAmount <= 0) {
+    console.warn(`⚠️ Voucher ${code} com valor de repasse zero. Apenas marca como usado.`);
+    // Marca como usado pois não há nada a transferir
+    await client.query("UPDATE vouchers SET status = 'used', used_at = NOW(), transfer_status = 'success:zero_amount' WHERE id = $1", [voucher.id]);
+    await client.query("COMMIT");
+    return res.status(200).json({ 
+        success: true, 
+        message: "Voucher validado. Repasse zero ou gratuito.",
+        code: code 
+    });
+}
 
-              console.log(`✅ Transferência direta concluída para ${voucher.partner_slug}.`);
-          }
-      } catch (stripeError) {
+let sourceTransactionId = null;
 
-          console.warn("⚠️ Stripe adiou a transferência (saldo ainda não liberado). O voucher será marcado como utilizado normalmente.");
-          console.warn("Motivo:", stripeError.message);
+// 4A. BUSCAR O ID DA COBRANÇA (CH_...) E VALIDAR O PAGAMENTO
+try {
+    const paymentIntent = await stripe.paymentIntents.retrieve(
+        voucher.stripe_payment_intent_id,
+        { expand: ['charges'] } // Garante que a informação da Cobrança venha junto
+    );
 
-          // Marca como usado mesmo assim
-          await client.query(`
-              UPDATE vouchers 
-              SET status = 'used',
-                  used_at = NOW()
-              WHERE id = $1
-          `, [voucher.id]);
+    if (paymentIntent.status !== 'succeeded') {
+        console.warn(`⚠️ Payment Intent ${voucher.stripe_payment_intent_id} não concluído (Status: ${paymentIntent.status}). Abortando transferência.`);
+        throw new Error(`Pagamento não concluído (Status: ${paymentIntent.status}).`);
+    }
 
-          await client.query("COMMIT");
+    if (paymentIntent.charges.data.length > 0) {
+        sourceTransactionId = paymentIntent.charges.data[0].id; 
+    } else {
+        console.error(`❌ Payment Intent ${voucher.stripe_payment_intent_id} succeeded mas sem Charge ID.`);
+        throw new Error("ID da Cobrança Stripe não encontrado. Abortando.");
+    }
 
-          return res.status(200).json({
-              success: true,
-              status: "pending_transfer",
-              message: "Voucher validado com sucesso! A transferência será processada automaticamente pela Stripe dentro de até 5 dias úteis.",
-              code
-          });
-      }
+} catch (intentError) {
+    console.error("❌ ERRO GRAVE NO FLUXO DE PAGAMENTO. TRANSFERÊNCIA ABORTADA:", intentError.message);
+    await client.query("ROLLBACK");
+    return res.status(500).json({ 
+        success: false, 
+        error: "Falha na validação do pagamento. Tente novamente ou contate o suporte.",
+        details: intentError.message 
+    });
+}
 
+// 4B. TENTAR A TRANSFERÊNCIA COM O ID CORRETO (CH_...)
+try {
+    const transfer = await stripe.transfers.create({
+        amount: transferAmount,
+        currency: 'eur',
+        destination: destinationAccountId,
+        source_transaction: sourceTransactionId,
+        metadata: {
+            voucher_code: code,
+            partner_slug: voucher.partner_slug,
+            voucher_id: voucher.id
+        }
+    });
 
-      // 5. Marcar o voucher como utilizado na base de dados
-      // 💡 CORRIGIDO: SET status = 'used' E used_at = NOW()
-      await client.query(
-        "UPDATE vouchers SET status = 'used', used_at = NOW() WHERE id = $1", 
-        [voucher.id]
-      );
+    console.log(`✅ Transferência iniciada (ID ${transfer.id}) para ${voucher.partner_slug}. Status: ${transfer.status}`);
 
-      await client.query("COMMIT");
-      
-      return res.status(200).json({ 
-          success: true,
-          message: "Voucher validado e utilizado. Transferência para o parceiro processada.",
-          code: code 
-      });
+    await client.query(
+        "UPDATE vouchers SET status = 'used', used_at = NOW(), transfer_status = 'success', stripe_transfer_id = $2 WHERE id = $1", 
+        [voucher.id, transfer.id]
+    );
+
+    await client.query("COMMIT");
+    
+    return res.status(200).json({ 
+        success: true,
+        message: "Voucher validado e utilizado. Transferência para o parceiro processada.",
+        code: code 
+    });
+
+} catch (stripeError) {
+    console.warn("⚠️ ERRO NA TRANSFERÊNCIA:", stripeError.message);
+    
+    await client.query(
+        "UPDATE vouchers SET status = 'used', used_at = NOW(), transfer_status = 'failed:stripe_error', transfer_error_msg = $2 WHERE id = $1", 
+        [voucher.id, stripeError.message]
+    );
+    
+    await client.query("COMMIT");
+
+    return res.status(200).json({ 
+        success: true, 
+        message: "Voucher validado, mas o repasse ao parceiro está pendente (erro Stripe). O voucher foi marcado como utilizado.",
+        code: code,
+        pending_transfer: true,
+        transfer_error: stripeError.message 
+    });
+}
 
     } 
     // ==========================================================

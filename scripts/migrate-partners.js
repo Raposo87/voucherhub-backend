@@ -148,7 +148,7 @@ INSERT INTO partners (
     10000,
     60,
     3333,
-    NULL
+    'acct_1SdfEFLfCpwo7PiJ'
 )
 ON CONFLICT (slug) DO UPDATE SET 
     name = EXCLUDED.name,
