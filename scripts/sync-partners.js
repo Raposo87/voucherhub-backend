@@ -5,8 +5,7 @@ import { pool } from '../src/db.js';
 async function syncPartners() {
   try {
     // 1. Lendo o arquivo JSON
-    const rawData = fs.readFileSync('./experiences.json', 'utf8');
-    const data = JSON.parse(rawData);
+    const rawData = fs.readFileSync('../site-orfetas/experiences.json', 'utf8');    const data = JSON.parse(rawData);
 
     console.log("🚀 Iniciando sincronização de parceiros...");
 
