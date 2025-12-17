@@ -49,53 +49,52 @@ app.use('/api/vouchers', vouchersRouter);
 app.use('/api/partners', partnersRouter);
 
 // =============================================================
-// 🚀 4. NOVO: ROTA DE AUTO-ONBOARDING (Gera link do Stripe)
+// 🚀 ROTA DE AUTO-ONBOARDING (DEBUG VERSION)
 // =============================================================
 app.get('/api/admin/onboard/:slug', async (req, res) => {
   const { slug } = req.params;
+  console.log(`[ONBOARDING] Recebida tentativa para o slug: ${slug}`);
 
   try {
-    // Busca dados no banco (que foram inseridos pelo sync-partners.js)
     const result = await pool.query(
       'SELECT email, stripe_account_id FROM partners WHERE slug = $1', 
       [slug]
     );
     
     if (result.rows.length === 0) {
-      return res.status(404).send("❌ Parceiro não encontrado. Primeiro adicione ao JSON e rode o sync-partners.js.");
+      console.log(`[ONBOARDING] Erro: Slug ${slug} não encontrado no banco.`);
+      return res.status(404).send("❌ Parceiro não encontrado no banco de dados.");
     }
 
-    const { email, stripe_account_id } = result.rows[0];
+    let { email, stripe_account_id } = result.rows[0];
+    console.log(`[ONBOARDING] Parceiro encontrado: ${email}, ID Stripe Atual: ${stripe_account_id}`);
 
-    let accountId = stripe_account_id;
-
-    // Se o parceiro ainda não tem conta Stripe, cria agora
-    if (!accountId) {
+    if (!stripe_account_id) {
+      console.log(`[ONBOARDING] Criando nova conta Express no Stripe para ${email}...`);
       const account = await stripe.accounts.create({
         type: 'express',
         email: email,
         capabilities: { transfers: { requested: true } },
       });
-      accountId = account.id;
+      stripe_account_id = account.id;
       
-      await pool.query('UPDATE partners SET stripe_account_id = $1 WHERE slug = $2', [accountId, slug]);
-      console.log(`✅ Conta Stripe criada e salva no banco: ${accountId}`);
+      await pool.query('UPDATE partners SET stripe_account_id = $1 WHERE slug = $2', [stripe_account_id, slug]);
+      console.log(`[ONBOARDING] Nova conta criada e salva: ${stripe_account_id}`);
     }
 
-    // Gera o link de onboarding
     const accountLink = await stripe.accountLinks.create({
-      account: accountId,
-      refresh_url: `${req.protocol}://${req.get('host')}/api/admin/onboard/${slug}`, 
+      account: stripe_account_id,
+      refresh_url: `https://modest-comfort-production.up.railway.app/api/admin/onboard/${slug}`, 
       return_url: 'https://voucherhub.pt',
       type: 'account_onboarding',
     });
 
-    // Redireciona para o cadastro do Stripe
-    res.redirect(accountLink.url);
+    console.log(`[ONBOARDING] Redirecionando utilizador para o Stripe...`);
+    return res.redirect(accountLink.url);
 
   } catch (error) {
-    console.error("Erro no Onboarding:", error);
-    res.status(500).send("Erro ao processar: " + error.message);
+    console.error("[ONBOARDING] ERRO CRÍTICO:", error);
+    res.status(500).send("Erro interno ao processar Stripe: " + error.message);
   }
 });
 
