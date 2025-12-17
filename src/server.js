@@ -2,15 +2,13 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import 'dotenv/config.js';
-import Stripe from 'stripe'; // 1. NOVO: Import da SDK da Stripe
 
 import paymentsRouter from './routes/payments.js';
 import vouchersRouter from './routes/vouchers.js';
 import partnersRouter from './routes/partners.js';
-import { initDb, pool } from './db.js'; // 2. ALTERADO: Adicionado 'pool'
+import { initDb } from './db.js';
 
 const app = express();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY); // 3. NOVO: Inicialização da Stripe
 
 // =============================================================
 // 1️⃣ CORS
@@ -27,8 +25,10 @@ const allowedOrigins = [
 app.use(cors({ origin: allowedOrigins }));
 
 // =============================================================
-// 2️⃣ WEBHOOK DA STRIPE — MANTIDO EXATAMENTE COMO ESTAVA
+// 2️⃣ WEBHOOK DA STRIPE — TEM QUE VIR ***ANTES DE express.json()***
 // =============================================================
+
+// Encontrar rota exata dentro do paymentsRouter
 const stripeWebhook = paymentsRouter.stack
   .find(r => r.route?.path === "/webhook" && r.route.methods.post)
   .route.stack[0].handle;
@@ -40,7 +40,7 @@ app.post(
 );
 
 // =============================================================
-// 3️⃣ MIDDLEWARES E ROTAS PADRÃO
+// 3️⃣ DEMO MAIS TODAS AS OUTRAS ROTAS
 // =============================================================
 app.use(express.json());
 
@@ -49,62 +49,17 @@ app.use('/api/vouchers', vouchersRouter);
 app.use('/api/partners', partnersRouter);
 
 // =============================================================
-// 🚀 ROTA DE AUTO-ONBOARDING (DEBUG VERSION)
-// =============================================================
-app.get('/api/admin/onboard/:slug', async (req, res) => {
-  const { slug } = req.params;
-  console.log(`[ONBOARDING] Recebida tentativa para o slug: ${slug}`);
-
-  try {
-    const result = await pool.query(
-      'SELECT email, stripe_account_id FROM partners WHERE slug = $1', 
-      [slug]
-    );
-    
-    if (result.rows.length === 0) {
-      console.log(`[ONBOARDING] Erro: Slug ${slug} não encontrado no banco.`);
-      return res.status(404).send("❌ Parceiro não encontrado no banco de dados.");
-    }
-
-    let { email, stripe_account_id } = result.rows[0];
-    console.log(`[ONBOARDING] Parceiro encontrado: ${email}, ID Stripe Atual: ${stripe_account_id}`);
-
-    if (!stripe_account_id) {
-      console.log(`[ONBOARDING] Criando nova conta Express no Stripe para ${email}...`);
-      const account = await stripe.accounts.create({
-        type: 'express',
-        email: email,
-        capabilities: { transfers: { requested: true } },
-      });
-      stripe_account_id = account.id;
-      
-      await pool.query('UPDATE partners SET stripe_account_id = $1 WHERE slug = $2', [stripe_account_id, slug]);
-      console.log(`[ONBOARDING] Nova conta criada e salva: ${stripe_account_id}`);
-    }
-
-    const accountLink = await stripe.accountLinks.create({
-      account: stripe_account_id,
-      refresh_url: `https://modest-comfort-production.up.railway.app/api/admin/onboard/${slug}`, 
-      return_url: 'https://voucherhub.pt',
-      type: 'account_onboarding',
-    });
-
-    console.log(`[ONBOARDING] Redirecionando utilizador para o Stripe...`);
-    return res.redirect(accountLink.url);
-
-  } catch (error) {
-    console.error("[ONBOARDING] ERRO CRÍTICO:", error);
-    res.status(500).send("Erro interno ao processar Stripe: " + error.message);
-  }
-});
-
-// =============================================================
-// HEALTH & START
+// HEALTH
 // =============================================================
 app.get('/health', (req, res) => res.json({ ok: true }));
 
+// =============================================================
+// START
+// =============================================================
 const port = process.env.PORT || 3000;
-app.listen(port, async () => {
-  console.log(`🚀 Server running on port ${port}`);
-  await initDb();
+
+initDb().then(() => {
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`🚀 Backend ok na porta ${port}`);
+  });
 });
