@@ -3,13 +3,14 @@
 ## O que é o prefixo?
 
 O prefixo é a parte inicial dos códigos de vouchers patrocinados. Por exemplo:
+
 - Código: `BANC-4CCC06`
 - Prefixo: `BANC`
 - Código único: `4CCC06`
 
 ## ⚠️ Isso vai quebrar o sistema?
 
-**NÃO!** O sistema busca os códigos pelo código **COMPLETO**, não pelo prefixo. 
+**NÃO!** O sistema busca os códigos pelo código **COMPLETO**, não pelo prefixo.
 Você pode alterar o prefixo sem problemas.
 
 ## 📋 Opções para alterar o prefixo
@@ -19,9 +20,11 @@ Você pode alterar o prefixo sem problemas.
 Se você ainda **não importou** os códigos no banco de dados:
 
 1. **Atualize o prefixo no CSV:**
+
    ```bash
    node scripts/update-csv-prefix.js --file=sponsor-vouchers-BANC-1763900611440.csv --old=BANC --new=NOVOPREFIXO
    ```
+
    Substitua `NOVOPREFIXO` pelo prefixo desejado (ex: `BANK`, `SPON`, etc.)
 
 2. **Importe o CSV atualizado:**
@@ -37,7 +40,8 @@ Se os códigos **já estão no banco de dados** e você quer alterá-los:
 node scripts/update-prefix-in-db.js --old=BANC --new=NOVOPREFIXO
 ```
 
-⚠️ **ATENÇÃO:** 
+⚠️ **ATENÇÃO:**
+
 - Isso altera **todos** os códigos que começam com o prefixo antigo
 - Códigos já usados também serão alterados
 - Certifique-se de que não existe conflito (códigos com o novo prefixo já existentes)
@@ -45,11 +49,13 @@ node scripts/update-prefix-in-db.js --old=BANC --new=NOVOPREFIXO
 ### Opção 3: Substituir completamente (deletar antigos e importar novos)
 
 1. **Atualize o prefixo no CSV:**
+
    ```bash
    node scripts/update-csv-prefix.js --file=sponsor-vouchers-BANC-1763900611440.csv --old=BANC --new=NOVOPREFIXO
    ```
 
 2. **Delete os códigos antigos do banco** (usando psql ou um cliente SQL):
+
    ```sql
    DELETE FROM sponsor_vouchers WHERE code LIKE 'BANC-%';
    ```
@@ -64,10 +70,10 @@ node scripts/update-prefix-in-db.js --old=BANC --new=NOVOPREFIXO
 Para ver quais códigos existem no banco:
 
 ```sql
-SELECT code, sponsor, used, created_at 
-FROM sponsor_vouchers 
-WHERE code LIKE 'BANC-%' 
-ORDER BY created_at DESC 
+SELECT code, sponsor, used, created_at
+FROM sponsor_vouchers
+WHERE code LIKE 'BANC-%'
+ORDER BY created_at DESC
 LIMIT 10;
 ```
 
@@ -81,5 +87,3 @@ A: O código será alterado, mas o registro de uso permanece. É melhor não alt
 
 **Q: Preciso mudar o nome do arquivo CSV também?**  
 A: Não é obrigatório, mas você pode renomear para manter a organização.
-
-
