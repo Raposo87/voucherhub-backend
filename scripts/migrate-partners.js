@@ -157,6 +157,37 @@ ON CONFLICT (slug) DO UPDATE SET
     location = EXCLUDED.location, 
     price_original_cents = EXCLUDED.price_original_cents,
     voucher_validity_days = 60;
+`
+// SLUG: ecoasters
+`
+INSERT INTO partners (
+    slug, 
+    name, 
+    email, 
+    phone, 
+    location, 
+    price_original_cents, 
+    voucher_validity_days, 
+    pin, 
+    stripe_account_id
+) VALUES (
+    'giravela-eco-sailing', 
+    'Gira Vela Eco Sailing', 
+    'contacto@giravelaecosailing.com', 
+    '+351 911 871 640', 
+    'Doca da Marinha - Av. Infante Dom Henrique, S/N - Baixa - Lisboa, Lisbon, Portugal', 
+    34999,
+    31491,
+    3331,
+    ''
+)
+ON CONFLICT (slug) DO UPDATE SET 
+    name = EXCLUDED.name,
+    email = EXCLUDED.email,
+    phone = EXCLUDED.phone,
+    location = EXCLUDED.location, 
+    price_original_cents = EXCLUDED.price_original_cents,
+    voucher_validity_days = 60;
 `,
 
   ];
