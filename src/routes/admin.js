@@ -15,18 +15,8 @@ router.post('/setup-partner', async (req, res) => {
     email, 
     phone, 
     location, 
-    price_cents, 
-    password // Senha vinda do formulário
+    price_cents
   } = req.body;
-
-  // 1. Verificação de segurança simples
-  // Substitua 'SUA_SENHA_AQUI' pela senha que desejar
-  if (password !== 'VoucherHub2025') {
-    return res.status(401).json({ 
-      success: false, 
-      error: "Acesso negado: Senha de administrador incorreta." 
-    });
-  }
 
   // GERAÇÃO AUTOMÁTICA DO PIN
   const autoPin = generatePIN();
@@ -34,7 +24,7 @@ router.post('/setup-partner', async (req, res) => {
   try {
     console.log(`[Admin] Iniciando criação do parceiro: ${name} (${slug})`);
 
-    // 2. Criar conta na Stripe (Connect Express)
+    // 1. Criar conta na Stripe (Connect Express)
     const account = await stripe.accounts.create({
       type: 'express',
       email: email,
@@ -43,18 +33,11 @@ router.post('/setup-partner', async (req, res) => {
       },
     });
 
-    // 3. Salvar na Railway com as 9 colunas
+    // 2. Salvar na Railway com as 9 colunas
     await pool.query(`
       INSERT INTO partners (
-        slug, 
-        name, 
-        email, 
-        phone, 
-        location, 
-        price_original_cents, 
-        voucher_validity_days, 
-        pin, 
-        stripe_account_id
+        slug, name, email, phone, location, 
+        price_original_cents, voucher_validity_days, pin, stripe_account_id
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       ON CONFLICT (slug) DO UPDATE SET 
         stripe_account_id = EXCLUDED.stripe_account_id,
@@ -69,12 +52,12 @@ router.post('/setup-partner', async (req, res) => {
       phone || '', 
       location || '', 
       price_cents || 0, 
-      60,       // voucher_validity_days padrão
-      autoPin,  // PIN gerado automaticamente
-      account.id // ID vindo da Stripe
+      60,       
+      autoPin,  
+      account.id
     ]);
 
-    // 4. Gerar link de Onboarding da Stripe para o parceiro completar o cadastro
+    // 3. Gerar link de Onboarding da Stripe
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
       refresh_url: 'https://voucherhub.pt', 
@@ -82,21 +65,16 @@ router.post('/setup-partner', async (req, res) => {
       type: 'account_onboarding',
     });
 
-    // Resposta final para o seu formulário HTML
     res.json({
       success: true,
       message: "Parceiro cadastrado com sucesso!",
       pin_gerado: autoPin,
-      stripe_id: account.id,
       onboarding_url: accountLink.url
     });
 
   } catch (error) {
     console.error('[Admin Error]:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
