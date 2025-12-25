@@ -7,6 +7,7 @@ import paymentsRouter from './routes/payments.js';
 import vouchersRouter from './routes/vouchers.js';
 import partnersRouter from './routes/partners.js';
 import { initDb } from './db.js';
+import adminRouter from './routes/admin.js';
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use(express.json());
 app.use('/api/payments', paymentsRouter);
 app.use('/api/vouchers', vouchersRouter);
 app.use('/api/partners', partnersRouter);
+app.use('/api/admin', adminRouter);
 
 // =============================================================
 // HEALTH

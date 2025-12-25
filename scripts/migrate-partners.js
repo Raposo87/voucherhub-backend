@@ -157,8 +157,9 @@ ON CONFLICT (slug) DO UPDATE SET
     location = EXCLUDED.location, 
     price_original_cents = EXCLUDED.price_original_cents,
     voucher_validity_days = 60;
-`
-// SLUG: ecoasters
+`,
+
+// SLUG: giravela-eco-sailing
 `
 INSERT INTO partners (
     slug, 
@@ -177,7 +178,7 @@ INSERT INTO partners (
     '+351 911 871 640', 
     'Doca da Marinha - Av. Infante Dom Henrique, S/N - Baixa - Lisboa, Lisbon, Portugal', 
     34999,
-    31491,
+    60,
     3331,
     ''
 )
@@ -188,7 +189,7 @@ ON CONFLICT (slug) DO UPDATE SET
     location = EXCLUDED.location, 
     price_original_cents = EXCLUDED.price_original_cents,
     voucher_validity_days = 60;
-`,
+`
 
   ];
 
