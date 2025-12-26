@@ -129,12 +129,11 @@ Verifique `GET /health` para confirmar que o servidor está vivo.
 - Adicione testes unitários para `payments.js` e `vouchers.js` (mock de Stripe).
 - Considere um job cron para expirar vouchers e relatórios administrativos por parceiro.
 
+
+## URL mostra como esta o andamento dos pagamentos via stripe dos vouchers validados:
+
+https://voucherhub-backend-production.up.railway.app/api/admin/audit-transfers
+
 ---
 
-Se quiser, eu posso:
 
-- importar automaticamente `sponsor-vouchers-BANC-1763900611440.csv` para a tabela `sponsor_vouchers`,
-- gerar um diagrama DOT/ASCII de dependências do projeto,
-- ou abrir e documentar funções específicas em `src/routes/payments.js` e `src/routes/vouchers.js`.
-
-Feito com ❤️ — se quiser, eu já executo a importação do CSV ou atualizo instruções adicionais.
