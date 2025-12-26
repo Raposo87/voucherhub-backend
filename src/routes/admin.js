@@ -78,4 +78,34 @@ router.post('/setup-partner', async (req, res) => {
   }
 });
 
+// ROTA DE AUDITORIA DE REPASSES PRESOS
+router.get('/audit-transfers', async (req, res) => {
+    try {
+      const result = await pool.query(`
+        SELECT 
+          code, 
+          partner_slug, 
+          (amount_cents / 100.0) as valor_total,
+          ((amount_cents * 0.8) / 100.0) as deve_receber,
+          transfer_error_msg,
+          used_at
+        FROM vouchers 
+        WHERE status = 'used' 
+        AND transfer_status = 'failed:stripe_error'
+      `);
+  
+      if (result.rows.length === 0) {
+        return res.json({ message: "✅ Tudo em dia! Nenhum repasse pendente." });
+      }
+  
+      res.json({
+        message: "⚠️ Atenção: Existem repasses que falharam!",
+        total_pendente: result.rows.length,
+        vouchers: result.rows
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
 export default router;
