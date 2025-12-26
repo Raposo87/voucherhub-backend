@@ -2,6 +2,7 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import 'dotenv/config.js';
+import helmet from 'helmet';
 
 import paymentsRouter from './routes/payments.js';
 import vouchersRouter from './routes/vouchers.js';
@@ -9,7 +10,23 @@ import partnersRouter from './routes/partners.js';
 import { initDb } from './db.js';
 import adminRouter from './routes/admin.js';
 
+
 const app = express();
+
+// =============================================================
+// 0️⃣ SEGURANÇA (HELMET) - Resolve HSTS, XSS, Clickjacking
+// =============================================================
+app.use(helmet({
+  contentSecurityPolicy: false, // Mantemos false para não bloquear as imagens do Cloudinary/Google Fonts por agora
+  crossOriginResourcePolicy: { policy: "cross-origin" } // Permite carregar recursos de diferentes domínios
+}));
+
+// Configuração específica para HSTS (Obrigatório para nota máxima no relatório)
+app.use(helmet.hsts({
+  maxAge: 31536000,        // 1 ano
+  includeSubDomains: true, 
+  preload: true
+}));
 
 // =============================================================
 // 1️⃣ CORS
