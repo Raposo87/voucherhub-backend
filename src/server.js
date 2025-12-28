@@ -8,6 +8,7 @@ import paymentsRouter from './routes/payments.js';
 import vouchersRouter from './routes/vouchers.js';
 import partnersRouter from './routes/partners.js';
 import { initDb } from './db.js';
+import { pool } from './db.js';
 import adminRouter from './routes/admin.js';
 
 
