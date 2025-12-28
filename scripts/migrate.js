@@ -14,6 +14,17 @@ async function run() {
     `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS transfer_status VARCHAR(50) DEFAULT 'pending';`,
     `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS transfer_error_msg TEXT;`,
 
+    // --- NOVA TABELA: SEARCH ANALYTICS (BI) ---
+    `CREATE TABLE IF NOT EXISTS search_analytics (
+      id SERIAL PRIMARY KEY,
+      search_term TEXT NOT NULL,
+      results_found INTEGER NOT NULL,
+      city TEXT,
+      country TEXT,
+      device_type TEXT,
+      search_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );`,
+
     // --- ÍNDICES EXISTENTES ---
     `CREATE INDEX IF NOT EXISTS idx_vouchers_status ON vouchers(status);`,
     `CREATE INDEX IF NOT EXISTS idx_vouchers_partner_status ON vouchers(partner_slug, status);`,

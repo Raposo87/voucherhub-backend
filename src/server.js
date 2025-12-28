@@ -83,3 +83,23 @@ initDb().then(() => {
     console.log(`🚀 Backend ok na porta ${port}`);
   });
 });
+
+// Rota de Analytics - Captura o que as pessoas pesquisam
+app.post('/api/analytics/search', async (req, res) => {
+  const { term, count, city, country, device } = req.body;
+
+  try {
+    // Insere os dados na tabela que acabamos de criar via migração
+    await pool.query(
+      `INSERT INTO search_analytics 
+       (search_term, results_found, city, country, device_type) 
+       VALUES ($1, $2, $3, $4, $5)`,
+      [term, count, city, country, device]
+    );
+
+    res.status(201).json({ success: true, message: 'Busca registrada com sucesso' });
+  } catch (err) {
+    console.error('❌ Erro ao gravar analytics de busca:', err);
+    res.status(500).json({ error: 'Erro interno ao salvar dados' });
+  }
+});
