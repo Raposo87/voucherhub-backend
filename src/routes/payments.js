@@ -275,7 +275,7 @@ router.post("/webhook", async (req, res) => {
       [partnerSlug]
     );
     const partner = partnerRes.rows[0] || {};
-    const daysValidity = partner.voucher_validity_days || 60;
+    const daysValidity = partner.voucher_validity_days || 365;
 
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + daysValidity);
