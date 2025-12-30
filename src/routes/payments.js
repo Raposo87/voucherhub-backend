@@ -414,7 +414,7 @@ router.post("/webhook", async (req, res) => {
         <div style="padding: 0 30px 30px 30px;">
             <div style="background: #fff8e1; border-left: 4px solid #ffa726; padding: 15px; border-radius: 6px;">
                 <p style="margin: 0 0 8px 0; font-size: 14px; color: #e65100; font-weight: 600;">⏰ Validade do Voucher</p>
-                <p style="margin: 0; font-size: 13px; color: #666;">Válido por ${daysValidity} dias (até ${expiryDateFormatted})</p>
+                <p style="margin: 0; font-size: 13px; color: #666;">Válido por 1 ano (até ${expiryDateFormatted})</p>
                 <p style="margin: 8px 0 0 0; font-size: 12px; color: #888;">⚠️ Lembre-se: Utilize seu voucher antes de ${expiryDateFormatted}</p>
             </div>
         </div>
@@ -494,6 +494,7 @@ router.post("/webhook", async (req, res) => {
             <div style="background: #f8f9ff; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea;">
                 <h3 style="margin: 0 0 5px 0; font-size: 18px; color: #333;">📦 ${productName}</h3>
                 <p style="margin: 0; font-size: 14px; color: #666;">Experiência adquirida com sucesso</p>
+                <p style="margin: 5px 0 0 0; font-size: 14px; color: #888;">(Contacte o parceiro para agendar o melhor dia e horário para a sua experiência)</p>
             </div>
         </div>
 
