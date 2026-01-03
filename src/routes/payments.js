@@ -44,38 +44,6 @@ router.post("/create-checkout-session", async (req, res) => {
       sponsorCode: rawSponsorCode,
     } = req.body;
 
-    // --- NOVO BLOCO DE VALIDAÇÃO DE ESTOQUE ---
-    
-    // 1. Verificar o limite do parceiro
-    const partnerCheck = await client.query(
-      "SELECT max_vouchers FROM partners WHERE slug = $1",
-      [partnerSlug]
-    );
-
-    if (partnerCheck.rowCount > 0) {
-      const maxVouchers = partnerCheck.rows[0].max_vouchers;
-
-      // Se maxVouchers for NULL, ignoramos a trava (Regra de Ouro)
-      if (maxVouchers !== null) {
-        // 2. Contar quantos já foram vendidos
-        const countRes = await client.query(
-          "SELECT COUNT(*) as sold FROM vouchers WHERE partner_slug = $1 AND status IN ('active', 'used')",
-          [partnerSlug]
-        );
-
-        const sold = parseInt(countRes.rows[0].sold);
-
-        // 3. Bloquear se não houver mais vaga
-        if (sold >= maxVouchers) {
-          client.release();
-          return res.status(400).json({ 
-            error: "Desculpe, este voucher está esgotado! Não foi possível processar a compra." 
-          });
-        }
-      }
-    }
-    // --- FIM DO BLOCO DE VALIDAÇÃO ---
-
     if (!email || !partnerSlug || !productName || !amountCents) {
       return res.status(400).json({
         error: "Missing fields: email, partnerSlug, productName, amountCents",
