@@ -218,4 +218,49 @@ try {
   }
 });
 
+// ROTA PARA CONSULTAR DISPONIBILIDADE DE ESTOQUE
+// GET /api/vouchers/availability/:slug
+router.get("/availability/:slug", async (req, res) => {
+  const { slug } = req.params;
+
+  try {
+    // 1. Busca o limite do parceiro
+    const partnerRes = await pool.query(
+      "SELECT max_vouchers FROM partners WHERE slug = $1",
+      [slug]
+    );
+
+    if (partnerRes.rowCount === 0) {
+      return res.status(404).json({ error: "Parceiro não encontrado" });
+    }
+
+    const maxVouchers = partnerRes.rows[0].max_vouchers;
+
+    // Se for NULL, é ilimitado
+    if (maxVouchers === null) {
+      return res.json({ infinite: true });
+    }
+
+    // 2. Conta quantos vouchers já foram vendidos (ativos ou usados)
+    const countRes = await pool.query(
+      "SELECT COUNT(*) as sold FROM vouchers WHERE partner_slug = $1 AND status IN ('active', 'used')",
+      [slug]
+    );
+
+    const sold = parseInt(countRes.rows[0].sold);
+    const available = Math.max(0, maxVouchers - sold);
+
+    return res.json({
+      infinite: false,
+      max: maxVouchers,
+      sold: sold,
+      available: available
+    });
+
+  } catch (err) {
+    console.error("Erro ao consultar disponibilidade:", err);
+    res.status(500).json({ error: "Erro interno ao consultar estoque" });
+  }
+});
+
 export default router;
