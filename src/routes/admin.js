@@ -108,4 +108,34 @@ router.get('/audit-transfers', async (req, res) => {
     }
   });
 
+  // --- NOVAS ROTAS PARA GESTÃO DE STOCK ---
+
+// 1. Listar todos os limites de stock atuais
+router.get("/stock-list", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM offer_inventory ORDER BY partner_slug ASC");
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao procurar stocks" });
+  }
+});
+
+// 2. Atualizar ou Criar um limite
+router.post("/update-stock", async (req, res) => {
+  const { partner_slug, offer_title, stock_limit } = req.body;
+  try {
+    await pool.query(
+      `INSERT INTO offer_inventory (partner_slug, offer_title, stock_limit) 
+       VALUES ($1, $2, $3)
+       ON CONFLICT (partner_slug, offer_title) 
+       DO UPDATE SET stock_limit = $3`,
+      [partner_slug, offer_title, stock_limit]
+    );
+    res.json({ success: true, message: "Stock atualizado com sucesso!" });
+  } catch (err) {
+    console.error("Erro ao atualizar stock:", err);
+    res.status(500).json({ success: false, error: "Erro ao atualizar stock" });
+  }
+});
+
 export default router;
