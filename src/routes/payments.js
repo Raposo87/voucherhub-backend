@@ -50,6 +50,33 @@ router.post("/create-checkout-session", async (req, res) => {
       });
     }
 
+    // --- 🛡️ INÍCIO DA VALIDAÇÃO DE STOCK ---
+    // 1. Verificar se existe um limite definido para esta oferta
+    const inventoryRes = await client.query(
+      "SELECT stock_limit FROM offer_inventory WHERE partner_slug = $1 AND offer_title = $2",
+      [partnerSlug, productName]
+    );
+
+    const stockLimit = inventoryRes.rows.length > 0 ? inventoryRes.rows[0].stock_limit : null;
+
+    // 2. Se houver limite (não for null), contar quantos já foram vendidos (ativos ou usados)
+    if (stockLimit !== null) {
+      const soldRes = await client.query(
+        "SELECT COUNT(*) as total FROM vouchers WHERE partner_slug = $1 AND offer_title = $2 AND status IN ('valid', 'used', 'active')",
+        [partnerSlug, productName]
+      );
+      
+      const totalSold = parseInt(soldRes.rows[0].total);
+
+      if (totalSold >= stockLimit) {
+        client.release(); // Importante libertar o cliente antes de retornar erro
+        return res.status(400).json({
+          error: "Desculpe, esta experiência acabou de esgotar!",
+        });
+      }
+    }
+    // --- FIM DA VALIDAÇÃO DE STOCK ---
+
     const sponsorCode = normalize(rawSponsorCode);
     let extraDiscount = 0;
     let sponsorName = null;
@@ -283,13 +310,14 @@ router.post("/webhook", async (req, res) => {
     // Inserir Voucher
     await pool.query(
       `INSERT INTO vouchers (
-        email, partner_slug, code, amount_cents, currency, 
+        email, partner_slug, offer_title, code, amount_cents, currency, 
         stripe_session_id, stripe_payment_intent_id, expires_at, 
         platform_fee_cents, partner_share_cents, status
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [
         email,
         partnerSlug,
+        productName, // <--- ADICIONADO AQUI
         code,
         amountCents,
         currency,
@@ -588,6 +616,41 @@ router.post("/webhook", async (req, res) => {
   } catch (err) {
     console.error("❌ ERRO WEBHOOK:", err);
     return res.status(500).json({ error: "Erro processando webhook" });
+  }
+});
+
+// ROTA PARA CONSULTAR DISPONIBILIDADE DE ESTOQUE
+router.get("/check-stock", async (req, res) => {
+  const { partnerSlug, productName } = req.query;
+
+  try {
+    // 1. Ver se existe limite
+    const inventoryRes = await pool.query(
+      "SELECT stock_limit FROM offer_inventory WHERE partner_slug = $1 AND offer_title = $2",
+      [partnerSlug, productName]
+    );
+
+    if (inventoryRes.rows.length === 0 || inventoryRes.rows[0].stock_limit === null) {
+      return res.json({ available: true }); // Sem limite definido
+    }
+
+    const stockLimit = inventoryRes.rows[0].stock_limit;
+
+    // 2. Contar vendidos
+    const soldRes = await pool.query(
+      "SELECT COUNT(*) as total FROM vouchers WHERE partner_slug = $1 AND offer_title = $2 AND status IN ('valid', 'used', 'active')",
+      [partnerSlug, productName]
+    );
+
+    const totalSold = parseInt(soldRes.rows[0].total);
+
+    return res.json({
+      available: totalSold < stockLimit,
+      remaining: Math.max(0, stockLimit - totalSold)
+    });
+  } catch (err) {
+    console.error("Erro ao verificar stock:", err);
+    res.status(500).json({ error: "Erro ao verificar disponibilidade" });
   }
 });
 
