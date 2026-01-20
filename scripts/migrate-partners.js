@@ -7,7 +7,7 @@ async function run() {
     // ETAPA 1: GARANTIR QUE AS COLUNAS EXISTEM
     `ALTER TABLE partners ADD COLUMN IF NOT EXISTS location VARCHAR(255);`,
     `ALTER TABLE partners ADD COLUMN IF NOT EXISTS price_original_cents INTEGER;`,
-    `ALTER TABLE partners ADD COLUMN IF NOT EXISTS voucher_validity_days INTEGER DEFAULT 20;`, 
+    `ALTER TABLE partners ADD COLUMN IF NOT EXISTS voucher_validity_days INTEGER DEFAULT 20;`,
     `ALTER TABLE partners ADD COLUMN IF NOT EXISTS stripe_account_id VARCHAR(255);`,
 
     // ETAPA 2: GARANTIR QUE A TABELA EXISTE
@@ -28,7 +28,7 @@ async function run() {
     `,
 
     // ETAPA 3: INSERÇÃO E ATUALIZAÇÃO DOS DADOS DOS PARCEIROS. voucher_validity_days = 60
-    
+
     // SLUG: surf-wave-lisbon
     `
     INSERT INTO partners (slug, name, email, phone, location, price_original_cents, voucher_validity_days, pin, stripe_account_id) VALUES
@@ -42,7 +42,7 @@ async function run() {
         voucher_validity_days = 120,
         stripe_account_id = EXCLUDED.stripe_account_id;
     `,
-    
+
     // SLUG: twolines
     `
     INSERT INTO partners (slug, name, email, phone, location, price_original_cents, voucher_validity_days, pin, stripe_account_id) VALUES
@@ -114,7 +114,7 @@ async function run() {
     `,
 
     // SLUG: azonda-surf-club
-`
+    `
 INSERT INTO partners (slug, name, email, phone, location, price_original_cents, voucher_validity_days, pin, stripe_account_id) VALUES
   ('azonda-surf-club', 'Azonda Surf Club', 'ian.fcosta@icloud.com', '+351 913 545 440', 'Classico By Olivier', 4000, 60, '2244', 'acct_1ScCLRL0iebOL7yv')
 ON CONFLICT (slug) DO UPDATE SET 
@@ -127,8 +127,8 @@ ON CONFLICT (slug) DO UPDATE SET
     stripe_account_id = EXCLUDED.stripe_account_id;
 `,
 
-  // SLUG: ecoasters
-`
+    // SLUG: ecoasters
+    `
 INSERT INTO partners (
     slug, 
     name, 
@@ -159,8 +159,8 @@ ON CONFLICT (slug) DO UPDATE SET
     voucher_validity_days = 120;
 `,
 
-// SLUG: giravela-eco-sailing
-`
+    // SLUG: giravela-eco-sailing
+    `
 INSERT INTO partners (
     slug, 
     name, 

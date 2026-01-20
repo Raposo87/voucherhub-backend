@@ -65,7 +65,7 @@ router.post("/create-checkout-session", async (req, res) => {
         "SELECT COUNT(*) as total FROM vouchers WHERE partner_slug = $1 AND offer_title = $2 AND status IN ('valid', 'used', 'active')",
         [partnerSlug, productName]
       );
-      
+
       const totalSold = parseInt(soldRes.rows[0].total);
 
       if (totalSold >= stockLimit) {
@@ -302,7 +302,7 @@ router.post("/webhook", async (req, res) => {
       [partnerSlug]
     );
     const partner = partnerRes.rows[0] || {};
-    const daysValidity = partner.voucher_validity_days || 120;
+    const daysValidity = partner.voucher_validity_days || 240;
 
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + daysValidity);
@@ -367,7 +367,7 @@ router.post("/webhook", async (req, res) => {
       const standardDiscPct = Math.round(
         ((originalPriceCents - baseAmountCents) /
           originalPriceCents) *
-          100
+        100
       );
       const partnerDiscountEuros = (
         (originalPriceCents - baseAmountCents) /
@@ -450,24 +450,20 @@ router.post("/webhook", async (req, res) => {
         <div style="padding: 0 30px 30px 30px;">
             <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333; font-weight: 600;">📍 Informações do Parceiro</h3>
             <div style="background: #f8f9ff; padding: 20px; border-radius: 8px;">
-                <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #667eea;">${
-                  partner.name || "Parceiro"
-                }</p>
-                ${
-                  partner.location
-                    ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📍 Localização:</strong> ${partner.location}</p>`
-                    : ""
-                } 
-                ${
-                  partner.phone
-                    ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📞 Telefone:</strong> ${partner.phone}</p>`
-                    : ""
-                }
-                ${
-                  partner.email
-                    ? `<p style="margin: 0; font-size: 14px; color: #666;"><strong>✉️ E-mail:</strong> ${partner.email}</p>`
-                    : ""
-                }
+                <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #667eea;">${partner.name || "Parceiro"
+        }</p>
+                ${partner.location
+          ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📍 Localização:</strong> ${partner.location}</p>`
+          : ""
+        } 
+                ${partner.phone
+          ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📞 Telefone:</strong> ${partner.phone}</p>`
+          : ""
+        }
+                ${partner.email
+          ? `<p style="margin: 0; font-size: 14px; color: #666;"><strong>✉️ E-mail:</strong> ${partner.email}</p>`
+          : ""
+        }
             </div>
         </div>
 
@@ -562,24 +558,20 @@ router.post("/webhook", async (req, res) => {
         <div style="padding: 0 30px 30px 30px;">
             <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333; font-weight: 600;">📍 Informações do Parceiro</h3>
             <div style="background: #f8f9ff; padding: 20px; border-radius: 8px;">
-                <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #667eea;">${
-                  partner.name || "Parceiro"
-                }</p>
-                ${
-                  partner.location
-                    ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📍 Localização:</strong> ${partner.location}</p>`
-                    : ""
-                }
-                ${
-                  partner.phone
-                    ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📞 Telefone:</strong> ${partner.phone}</p>`
-                    : ""
-                }
-                ${
-                  partner.email
-                    ? `<p style="margin: 0; font-size: 14px; color: #666;"><strong>✉️ E-mail:</strong> ${partner.email}</p>`
-                    : ""
-                }
+                <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #667eea;">${partner.name || "Parceiro"
+        }</p>
+                ${partner.location
+          ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📍 Localização:</strong> ${partner.location}</p>`
+          : ""
+        }
+                ${partner.phone
+          ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #666;"><strong>📞 Telefone:</strong> ${partner.phone}</p>`
+          : ""
+        }
+                ${partner.email
+          ? `<p style="margin: 0; font-size: 14px; color: #666;"><strong>✉️ E-mail:</strong> ${partner.email}</p>`
+          : ""
+        }
             </div>
         </div>
 

@@ -9,12 +9,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const generatePIN = () => Math.floor(1000 + Math.random() * 9000).toString();
 
 router.post('/setup-partner', async (req, res) => {
-  const { 
-    slug, 
-    name, 
-    email, 
-    phone, 
-    location, 
+  const {
+    slug,
+    name,
+    email,
+    phone,
+    location,
     price_cents
   } = req.body;
 
@@ -46,21 +46,21 @@ router.post('/setup-partner', async (req, res) => {
         location = EXCLUDED.location,
         price_original_cents = EXCLUDED.price_original_cents;
     `, [
-      slug, 
-      name, 
-      email, 
-      phone || '', 
-      location || '', 
-      price_cents || 0, 
-      60,       
-      autoPin,  
+      slug,
+      name,
+      email,
+      phone || '',
+      location || '',
+      price_cents || 0,
+      240,       // 8 meses (240 dias)
+      autoPin,
       account.id
     ]);
 
     // 3. Gerar link de Onboarding da Stripe
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: 'https://voucherhub.pt', 
+      refresh_url: 'https://voucherhub.pt',
       return_url: 'https://voucherhub.pt',
       type: 'account_onboarding',
     });
@@ -80,8 +80,8 @@ router.post('/setup-partner', async (req, res) => {
 
 // ROTA DE AUDITORIA DE REPASSES PRESOS
 router.get('/audit-transfers', async (req, res) => {
-    try {
-      const result = await pool.query(`
+  try {
+    const result = await pool.query(`
         SELECT 
           code, 
           partner_slug, 
@@ -93,22 +93,22 @@ router.get('/audit-transfers', async (req, res) => {
         WHERE status = 'used' 
         AND transfer_status = 'failed:stripe_error'
       `);
-  
-      if (result.rows.length === 0) {
-        return res.json({ message: "✅ Tudo em dia! Nenhum repasse pendente." });
-      }
-  
-      res.json({
-        message: "⚠️ Atenção: Existem repasses que falharam!",
-        total_pendente: result.rows.length,
-        vouchers: result.rows
-      });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
 
-  // --- NOVAS ROTAS PARA GESTÃO DE STOCK ---
+    if (result.rows.length === 0) {
+      return res.json({ message: "✅ Tudo em dia! Nenhum repasse pendente." });
+    }
+
+    res.json({
+      message: "⚠️ Atenção: Existem repasses que falharam!",
+      total_pendente: result.rows.length,
+      vouchers: result.rows
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- NOVAS ROTAS PARA GESTÃO DE STOCK ---
 
 // 1. Listar todos os limites de stock atuais
 router.get("/stock-list", async (req, res) => {
