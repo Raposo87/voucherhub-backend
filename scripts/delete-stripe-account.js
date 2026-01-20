@@ -29,4 +29,4 @@ const accountIdFromArgs = process.argv[2];
 deleteAccount(accountIdFromArgs);
 
 // Como deletar a conta:
-// node scripts/delete-stripe-account.js acct_1SZI1ULEy1X3DVbg
+// node scripts/delete-stripe-account.js acct_1SZI1ULEy1X3DVbg (acct_1SZI1ULEy1X3DVbg é o ID da conta que você deseja deletar)
