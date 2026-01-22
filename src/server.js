@@ -20,12 +20,13 @@ const app = express();
 app.use(helmet({
   contentSecurityPolicy: false, // Mantemos false para não bloquear as imagens do Cloudinary/Google Fonts por agora
   crossOriginResourcePolicy: { policy: "cross-origin" } // Permite carregar recursos de diferentes domínios
+
 }));
 
 // Configuração específica para HSTS (Obrigatório para nota máxima no relatório)
 app.use(helmet.hsts({
   maxAge: 31536000,        // 1 ano
-  includeSubDomains: true, 
+  includeSubDomains: true,
   preload: true
 }));
 
@@ -42,7 +43,41 @@ const allowedOrigins = [
   'null'
 ];
 
-app.use(cors({ origin: allowedOrigins }));
+// Configuração CORS mais permissiva para funcionar com Instagram e outros embeds
+app.use(cors({
+  origin: function (origin, callback) {
+    // Permite requisições sem origem (null) - comum em mobile apps, iframes, Instagram embeds
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    // Verifica se a origem está na lista permitida
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Permite qualquer origem que contenha voucherhub.pt (subdomínios)
+    if (origin.includes('voucherhub.pt')) {
+      return callback(null, true);
+    }
+
+    // Permite origens do Instagram (para embeds)
+    if (origin.includes('instagram.com') || origin.includes('facebook.com')) {
+      return callback(null, true);
+    }
+
+    // Em desenvolvimento, permite qualquer origem
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+
+    // Bloqueia outras origens em produção
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 
 // =============================================================
 // 2️⃣ WEBHOOK DA STRIPE — TEM QUE VIR ***ANTES DE express.json()***
