@@ -1080,6 +1080,4 @@ O Railway verifica `GET /health` para determinar se o serviço está rodando.
 
 ---
 
-**Última atualização:** Dezembro 2025
-
-**Versão do Backend:** 1.0.0
+**Última atualização:** Dezembro 2025**Versão do Backend:** 1.0.0

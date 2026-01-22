@@ -442,7 +442,7 @@ router.post("/webhook", async (req, res) => {
         <div style="padding: 0 30px 30px 30px;">
             <div style="background: #fff8e1; border-left: 4px solid #ffa726; padding: 15px; border-radius: 6px;">
                 <p style="margin: 0 0 8px 0; font-size: 14px; color: #e65100; font-weight: 600;">⏰ Validade do Voucher</p>
-                <p style="margin: 0; font-size: 13px; color: #666;">Válido por 4 meses (até ${expiryDateFormatted})</p>
+                <p style="margin: 0; font-size: 13px; color: #666;">Válido por 8 meses (até ${expiryDateFormatted})</p>
                 <p style="margin: 8px 0 0 0; font-size: 12px; color: #888;">⚠️ Lembre-se: Utilize seu voucher antes de ${expiryDateFormatted}</p>
             </div>
         </div>
